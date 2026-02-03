@@ -271,7 +271,7 @@ fn calculate_variance(values: &[f32]) -> f32 {
     variance
 }
 
-/// Store embedding in Neo4j node
+/// Store embedding in Neo4j node using real neo4rs driver
 async fn store_in_neo4j(
     uri: &str,
     user: &str,
@@ -282,18 +282,42 @@ async fn store_in_neo4j(
     models: &[String],
     individual_embeddings: &HashMap<String, Vec<f32>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // This would use a Neo4j driver - for now, return success
-    // In real implementation, you'd use something like neo4rs crate
+    use crate::storage::{Neo4jConfig, Neo4jEmbeddingRecord, Neo4jStorage};
     
-    // Example Cypher query:
-    // MERGE (n:Entity {id: $node_id})
-    // SET n.embedding = $embedding,
-    //     n.models = $models,
-    //     n.embedding_quality = $quality,
-    //     n.updated_at = datetime()
+    // Create Neo4j config from provided credentials
+    let config = Neo4jConfig {
+        uri: uri.to_string(),
+        user: user.to_string(),
+        password: password.to_string(),
+        max_connections: 5,
+    };
     
-    println!("Storing in Neo4j: node_id={}, label={}, embedding_dim={}", 
-             node_id, label, embedding.len());
+    // Connect to Neo4j
+    let storage = Neo4jStorage::new(&config).await
+        .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn std::error::Error + Send + Sync>)?;
+    
+    // Prepare the record
+    let record = Neo4jEmbeddingRecord {
+        node_id: node_id.to_string(),
+        node_label: label.to_string(),
+        text: String::new(), // Text is stored separately in PostgreSQL
+        embedding: individual_embeddings.values().next().cloned().unwrap_or_default(),
+        fused_embedding: embedding.to_vec(),
+        models_used: models.to_vec(),
+        quality_score: 0.8, // Default quality score
+        metadata: individual_embeddings.iter()
+            .map(|(k, v)| (k.clone(), serde_json::json!({"dim": v.len()})))
+            .collect(),
+    };
+    
+    // Store in Neo4j
+    storage.store_embedding(record).await
+        .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) as Box<dyn std::error::Error + Send + Sync>)?;
+    
+    tracing::info!(
+        "Stored embedding in Neo4j: node_id={}, label={}, embedding_dim={}",
+        node_id, label, embedding.len()
+    );
     
     Ok(())
 }
@@ -330,9 +354,209 @@ async fn store_in_postgres(
 pub async fn get_neo4j_embeddings(
     Query(params): Query<HashMap<String, String>>,
 ) -> Json<serde_json::Value> {
-    Json(serde_json::json!({
-        "status": "not_implemented_yet",
-        "message": "Neo4j retrieval endpoint coming soon",
-        "params": params
-    }))
+    use crate::storage::{Neo4jConfig, Neo4jStorage};
+    
+    // Extract node_id from params
+    let node_id = match params.get("node_id") {
+        Some(id) => id,
+        None => return Json(serde_json::json!({
+            "success": false,
+            "error": "node_id parameter is required"
+        })),
+    };
+    
+    // Create Neo4j config from environment
+    let config = Neo4jConfig::from_env();
+    
+    // Connect and fetch
+    match Neo4jStorage::new(&config).await {
+        Ok(storage) => {
+            match storage.get_embedding(node_id).await {
+                Ok(Some(record)) => Json(serde_json::json!({
+                    "success": true,
+                    "data": {
+                        "node_id": record.node_id,
+                        "node_label": record.node_label,
+                        "text": record.text,
+                        "embedding_dim": record.fused_embedding.len(),
+                        "models_used": record.models_used,
+                        "quality_score": record.quality_score,
+                    }
+                })),
+                Ok(None) => Json(serde_json::json!({
+                    "success": false,
+                    "error": "Embedding not found"
+                })),
+                Err(e) => Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Failed to get embedding: {}", e)
+                })),
+            }
+        }
+        Err(e) => Json(serde_json::json!({
+            "success": false,
+            "error": format!("Failed to connect to Neo4j: {}", e)
+        })),
+    }
 }
+
+// =============================================================================
+// Additional Neo4j API Endpoints
+// =============================================================================
+
+/// Search for similar embeddings in Neo4j
+#[derive(Debug, serde::Deserialize)]
+pub struct Neo4jSearchRequest {
+    pub query_embedding: Vec<f32>,
+    pub limit: Option<usize>,
+    pub min_similarity: Option<f32>,
+}
+
+pub async fn search_neo4j_embeddings(
+    Json(request): Json<Neo4jSearchRequest>,
+) -> Json<serde_json::Value> {
+    use crate::storage::{Neo4jConfig, Neo4jStorage};
+    
+    let config = Neo4jConfig::from_env();
+    
+    match Neo4jStorage::new(&config).await {
+        Ok(storage) => {
+            let limit = request.limit.unwrap_or(10);
+            let min_similarity = request.min_similarity.unwrap_or(0.5);
+            
+            match storage.search_similar(&request.query_embedding, limit, min_similarity).await {
+                Ok(results) => {
+                    let formatted: Vec<serde_json::Value> = results.iter()
+                        .map(|(record, score)| serde_json::json!({
+                            "node_id": record.node_id,
+                            "node_label": record.node_label,
+                            "similarity": score,
+                            "quality_score": record.quality_score,
+                        }))
+                        .collect();
+                    
+                    Json(serde_json::json!({
+                        "success": true,
+                        "results": formatted,
+                        "count": results.len()
+                    }))
+                }
+                Err(e) => Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Search failed: {}", e)
+                })),
+            }
+        }
+        Err(e) => Json(serde_json::json!({
+            "success": false,
+            "error": format!("Failed to connect to Neo4j: {}", e)
+        })),
+    }
+}
+
+/// Batch store embeddings in Neo4j
+#[derive(Debug, serde::Deserialize)]
+pub struct Neo4jBatchRequest {
+    pub records: Vec<Neo4jBatchRecord>,
+    pub neo4j_uri: Option<String>,
+    pub neo4j_user: Option<String>,
+    pub neo4j_password: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct Neo4jBatchRecord {
+    pub node_id: String,
+    pub node_label: String,
+    pub text: String,
+    pub embedding: Vec<f32>,
+    pub models_used: Vec<String>,
+}
+
+pub async fn batch_store_neo4j_embeddings(
+    Json(request): Json<Neo4jBatchRequest>,
+) -> Json<serde_json::Value> {
+    use crate::storage::{Neo4jConfig, Neo4jEmbeddingRecord, Neo4jStorage};
+    
+    let config = if let (Some(uri), Some(user), Some(password)) = 
+        (request.neo4j_uri, request.neo4j_user, request.neo4j_password) {
+        Neo4jConfig {
+            uri,
+            user,
+            password,
+            max_connections: 10,
+        }
+    } else {
+        Neo4jConfig::from_env()
+    };
+    
+    match Neo4jStorage::new(&config).await {
+        Ok(storage) => {
+            let records: Vec<Neo4jEmbeddingRecord> = request.records.iter()
+                .map(|r| Neo4jEmbeddingRecord {
+                    node_id: r.node_id.clone(),
+                    node_label: r.node_label.clone(),
+                    text: r.text.clone(),
+                    embedding: r.embedding.clone(),
+                    fused_embedding: r.embedding.clone(),
+                    models_used: r.models_used.clone(),
+                    quality_score: 0.8,
+                    metadata: std::collections::HashMap::new(),
+                })
+                .collect();
+            
+            match storage.store_batch(records).await {
+                Ok(stored_ids) => Json(serde_json::json!({
+                    "success": true,
+                    "stored_count": stored_ids.len(),
+                    "node_ids": stored_ids
+                })),
+                Err(e) => Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Batch store failed: {}", e)
+                })),
+            }
+        }
+        Err(e) => Json(serde_json::json!({
+            "success": false,
+            "error": format!("Failed to connect to Neo4j: {}", e)
+        })),
+    }
+}
+
+/// Delete an embedding from Neo4j
+pub async fn delete_neo4j_embedding(
+    Query(params): Query<HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    use crate::storage::{Neo4jConfig, Neo4jStorage};
+    
+    let node_id = match params.get("node_id") {
+        Some(id) => id,
+        None => return Json(serde_json::json!({
+            "success": false,
+            "error": "node_id parameter is required"
+        })),
+    };
+    
+    let config = Neo4jConfig::from_env();
+    
+    match Neo4jStorage::new(&config).await {
+        Ok(storage) => {
+            match storage.delete_embedding(node_id).await {
+                Ok(deleted) => Json(serde_json::json!({
+                    "success": true,
+                    "deleted": deleted,
+                    "node_id": node_id
+                })),
+                Err(e) => Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Delete failed: {}", e)
+                })),
+            }
+        }
+        Err(e) => Json(serde_json::json!({
+            "success": false,
+            "error": format!("Failed to connect to Neo4j: {}", e)
+        })),
+    }
+}
+

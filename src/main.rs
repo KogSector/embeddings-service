@@ -1,9 +1,7 @@
 //! Main entry point for the embeddings service
 
 use axum::{
-    http::StatusCode,
-    response::Json,
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
 };
 use std::net::SocketAddr;
@@ -17,7 +15,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use embeddings_service::{
     api::{health_check, generate_embeddings, generate_batch_embeddings, search_similar, list_models, 
           generate_graphiti_embeddings, process_chunks, list_graphiti_models, graphiti_health,
-          generate_neo4j_embeddings, get_neo4j_embeddings},
+          generate_neo4j_embeddings, get_neo4j_embeddings, 
+          search_neo4j_embeddings, batch_store_neo4j_embeddings, delete_neo4j_embedding},
     core::Config,
     EmbeddingsService,
 };
@@ -54,6 +53,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Neo4j integration endpoints
         .route("/api/v1/neo4j/generate", post(generate_neo4j_embeddings))
         .route("/api/v1/neo4j/get", get(get_neo4j_embeddings))
+        .route("/api/v1/neo4j/search", post(search_neo4j_embeddings))
+        .route("/api/v1/neo4j/batch", post(batch_store_neo4j_embeddings))
+        .route("/api/v1/neo4j/delete", delete(delete_neo4j_embedding))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -71,3 +73,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
