@@ -23,6 +23,7 @@ pub trait EmbeddingModel: Send + Sync {
     }
 }
 
+#[derive(Clone)]
 pub struct ModelManager {
     models: Arc<RwLock<HashMap<String, Arc<dyn EmbeddingModel>>>>,
     config: Config,
@@ -43,11 +44,7 @@ impl ModelManager {
             return Ok(());
         }
 
-        let model: Arc<dyn EmbeddingModel> = if model_name.starts_with("openai/") {
-            Arc::new(crate::models::OpenAIModel::new(model_name, &self.config)?)
-        } else {
-            Arc::new(crate::models::SentenceTransformersModel::new(model_name, &self.config)?)
-        };
+        let model: Arc<dyn EmbeddingModel> = Arc::new(crate::models::SentenceTransformersModel::new(model_name, &self.config)?);
 
         models.insert(model_name.to_string(), model);
         tracing::info!("Loaded model: {}", model_name);

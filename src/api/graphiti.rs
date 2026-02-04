@@ -68,7 +68,7 @@ pub struct ModelInfoQuery {
     pub format: Option<String>, // "graphiti" to return Graphiti-compatible models
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct GraphitiModelInfo {
     pub id: String,
     pub name: String,
@@ -80,10 +80,11 @@ pub struct GraphitiModelInfo {
 
 /// Generate embeddings in Graphiti-compatible format
 pub async fn generate_graphiti_embeddings(
-    State(model_manager): State<Arc<ModelManager>>,
-    State(storage): State<Arc<PostgresStorage>>,
+    State(app_state): State<crate::AppState>,
     Json(request): Json<GraphitiEmbeddingRequest>,
 ) -> Result<Json<GraphitiEmbeddingResponse>, StatusCode> {
+    let model_manager = &app_state.model_manager;
+    let storage = &app_state.postgres_storage;
     let model_name = request.model.as_deref().unwrap_or("nomic-embed-text");
     
     // Ensure model is loaded
@@ -115,10 +116,11 @@ pub async fn generate_graphiti_embeddings(
 
 /// Process document chunks with embeddings
 pub async fn process_chunks(
-    State(model_manager): State<Arc<ModelManager>>,
-    State(storage): State<Arc<PostgresStorage>>,
+    State(app_state): State<crate::AppState>,
     Json(request): Json<ChunkEmbeddingRequest>,
 ) -> Result<Json<ChunkEmbeddingResponse>, StatusCode> {
+    let model_manager = &app_state.model_manager;
+    let storage = &app_state.postgres_storage;
     let model_name = request.model.as_deref().unwrap_or("nomic-embed-text");
     let batch_size = request.batch_size.unwrap_or(32);
     
@@ -173,9 +175,10 @@ pub async fn process_chunks(
 
 /// List models compatible with Graphiti
 pub async fn list_graphiti_models(
-    State(model_manager): State<Arc<ModelManager>>,
-    Query(query): Query<ModelInfoQuery>,
+    State(app_state): State<crate::AppState>,
+    Query(_query): Query<ModelInfoQuery>,
 ) -> Json<Vec<GraphitiModelInfo>> {
+    let model_manager = &app_state.model_manager;
     let loaded_models = model_manager.list_models().await;
     let mut models = Vec::new();
 
@@ -184,11 +187,7 @@ pub async fn list_graphiti_models(
             let model_info = GraphitiModelInfo {
                 id: model_name.clone(),
                 name: model_name.clone(),
-                provider: if model_name.starts_with("openai/") {
-                    "openai".to_string()
-                } else {
-                    "local".to_string()
-                },
+                provider: "local".to_string(),
                 dimension: model.dimension(),
                 max_tokens: Some(8192), // Default max tokens
                 supports_graphiti: true,
@@ -204,14 +203,6 @@ pub async fn list_graphiti_models(
             name: "Nomic Embed Text".to_string(),
             provider: "local".to_string(),
             dimension: 768,
-            max_tokens: Some(8192),
-            supports_graphiti: true,
-        },
-        GraphitiModelInfo {
-            id: "openai/text-embedding-3-small".to_string(),
-            name: "OpenAI Text Embedding 3 Small".to_string(),
-            provider: "openai".to_string(),
-            dimension: 1536,
             max_tokens: Some(8192),
             supports_graphiti: true,
         },

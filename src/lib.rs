@@ -14,6 +14,13 @@ use crate::core::{Config, Result};
 use crate::models::ModelManager;
 use crate::storage::{PostgresStorage, RedisCache};
 
+// Application state for Axum
+#[derive(Clone)]
+pub struct AppState {
+    pub model_manager: Arc<ModelManager>,
+    pub postgres_storage: Arc<PostgresStorage>,
+}
+
 pub struct EmbeddingsService {
     pub config: Config,
     pub model_manager: Arc<ModelManager>,
@@ -47,5 +54,12 @@ impl EmbeddingsService {
 
     pub fn config(&self) -> &Config {
         &self.config
+    }
+    
+    pub fn app_state(self) -> AppState {
+        AppState {
+            model_manager: self.model_manager,
+            postgres_storage: self.postgres_storage,
+        }
     }
 }

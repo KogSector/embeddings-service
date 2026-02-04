@@ -41,7 +41,7 @@ impl BatchGenerator {
         let processing_time = start_time.elapsed().as_millis() as u64;
         
         Ok(BatchEmbeddingResponse {
-            embeddings,
+            embeddings: embeddings.clone(),
             model: request.model,
             dimension: model.dimension(),
             processing_time_ms: processing_time,

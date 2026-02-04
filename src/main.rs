@@ -1,10 +1,11 @@
 //! Main entry point for the embeddings service
 
 use axum::{
-    routing::{get, post, delete},
+    routing::{get, post},
     Router,
 };
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
@@ -14,10 +15,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use embeddings_service::{
     api::{health_check, generate_embeddings, generate_batch_embeddings, search_similar, list_models, 
-          generate_graphiti_embeddings, process_chunks, list_graphiti_models, graphiti_health,
-          generate_neo4j_embeddings, get_neo4j_embeddings, 
-          search_neo4j_embeddings, batch_store_neo4j_embeddings, delete_neo4j_embedding},
+          generate_graphiti_embeddings, process_chunks, list_graphiti_models, graphiti_health},
     core::Config,
+    models::ModelManager,
     EmbeddingsService,
 };
 
@@ -37,32 +37,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let service = EmbeddingsService::new(config.clone()).await?;
     service.initialize_default_model().await?;
 
+    // Clone model_manager before moving service
+    let model_manager = service.model_manager.clone();
+    let app_state = service.app_state();
+
     // Build router
     let app = Router::new()
         // Standard endpoints
         .route("/health", get(health_check))
         .route("/api/v1/generate", post(generate_embeddings))
         .route("/api/v1/generate/batch", post(generate_batch_embeddings))
-        .route("/api/v1/search", get(search_similar))
         .route("/api/v1/models", get(list_models))
-        // Graphiti-compatible endpoints
+        .with_state(model_manager)
+        // Routes that need both states
+        .route("/api/v1/search", get(search_similar))
         .route("/api/v1/graphiti/health", get(graphiti_health))
         .route("/api/v1/graphiti/generate", post(generate_graphiti_embeddings))
         .route("/api/v1/graphiti/chunks", post(process_chunks))
         .route("/api/v1/graphiti/models", get(list_graphiti_models))
-        // Neo4j integration endpoints
-        .route("/api/v1/neo4j/generate", post(generate_neo4j_embeddings))
-        .route("/api/v1/neo4j/get", get(get_neo4j_embeddings))
-        .route("/api/v1/neo4j/search", post(search_neo4j_embeddings))
-        .route("/api/v1/neo4j/batch", post(batch_store_neo4j_embeddings))
-        .route("/api/v1/neo4j/delete", delete(delete_neo4j_embedding))
+        .with_state(app_state)
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(CorsLayer::permissive())
-        )
-        .with_state(service.model_manager.clone())
-        .with_state(service.postgres_storage.clone());
+        );
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));

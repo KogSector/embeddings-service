@@ -22,14 +22,14 @@ pub enum EmbeddingError {
     #[error("Redis error: {0}")]
     RedisError(#[from] redis::RedisError),
     
+    #[error("Neo4j error: {0}")]
+    Neo4jError(#[from] neo4rs::Error),
+    
     #[error("Python error: {0}")]
     PythonError(String),
     
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
-    
-    #[error("HTTP error: {0}")]
-    HttpError(#[from] reqwest::Error),
     
     #[error("Configuration error: {0}")]
     ConfigError(String),

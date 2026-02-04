@@ -30,7 +30,7 @@ impl RedisCache {
         
         let value = serde_json::to_string(embedding)?;
         
-        conn.set_ex(key, value, ttl.as_secs() as usize).await?;
+        conn.set_ex::<_, _, ()>(key, value, ttl.as_secs()).await?;
         
         Ok(())
     }
@@ -56,15 +56,15 @@ impl RedisCache {
     ) -> Result<()> {
         let mut conn = self.client.get_async_connection().await?;
         
-        let hash_key = format!("text_hash:{}", self::compute_text_hash(text));
+        let hash_key = format!("text_hash:{}", RedisCache::compute_text_hash(text));
         
-        conn.set_ex(&hash_key, embedding_key, ttl.as_secs() as usize).await?;
+        conn.set_ex::<_, _, ()>(&hash_key, embedding_key, ttl.as_secs()).await?;
         
         Ok(())
     }
 
     pub async fn get_embedding_by_text(&self, text: &str) -> Result<Option<Vec<f32>>> {
-        let hash_key = format!("text_hash:{}", self::compute_text_hash(text));
+        let hash_key = format!("text_hash:{}", RedisCache::compute_text_hash(text));
         
         let mut conn = self.client.get_async_connection().await?;
         
@@ -89,10 +89,19 @@ impl RedisCache {
         Ok(keys.len())
     }
 
-    pub async fn get_cache_stats(&self) -> Result<redis::Info> {
+    pub async fn get_cache_stats(&self) -> Result<serde_json::Value> {
         let mut conn = self.client.get_async_connection().await?;
         let info: String = redis::cmd("INFO").query_async(&mut conn).await?;
-        Ok(redis::parse_info(&info)?)
+        
+        // Parse Redis INFO output into key-value pairs
+        let mut stats = serde_json::Map::new();
+        for line in info.lines() {
+            if let Some((key, value)) = line.split_once(':') {
+                stats.insert(key.to_string(), serde_json::Value::String(value.to_string()));
+            }
+        }
+        
+        Ok(serde_json::Value::Object(stats))
     }
 
     fn compute_text_hash(text: &str) -> String {

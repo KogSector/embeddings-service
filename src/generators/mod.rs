@@ -3,5 +3,5 @@
 pub mod batch;
 pub mod streaming;
 
-pub use batch::BatchGenerator;
+pub use batch::{BatchGenerator, BatchEmbeddingRequest, BatchEmbeddingResponse};
 pub use streaming::StreamingGenerator;

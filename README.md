@@ -6,7 +6,7 @@ A high-performance embedding generation and vector search service for the ConFus
 
 ## Features
 
-- **Multiple Model Support**: SentenceTransformers, OpenAI embeddings
+- **Open Source Models**: SentenceTransformers embedding models
 - **Batch Processing**: Efficient batch embedding generation
 - **Vector Search**: Similarity search with pgvector
 - **Caching**: Redis-based caching for performance
@@ -39,7 +39,6 @@ Set environment variables:
 ```bash
 export POSTGRES_URL="postgresql://localhost/embeddings"
 export REDIS_URL="redis://localhost"
-export OPENAI_API_KEY="your-openai-key"  # Optional
 ```
 
 ### Running

@@ -72,7 +72,7 @@ pub async fn generate_neo4j_embeddings(
         request.models = Some(vec![
             "nomic-embed-text".to_string(),      // Local - good for code
             "sentence-transformers/all-mpnet-base-v2".to_string(), // General purpose
-            "openai/text-embedding-3-small".to_string(), // High quality
+            "sentence-transformers/all-MiniLM-L6-v2".to_string(), // Fast and efficient
         ]);
     }
 

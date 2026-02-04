@@ -2,8 +2,6 @@
 
 pub mod manager;
 pub mod sentence_transformers;
-pub mod openai;
 
-pub use manager::ModelManager;
+pub use manager::{ModelManager, EmbeddingModel};
 pub use sentence_transformers::SentenceTransformersModel;
-pub use openai::OpenAIModel;
