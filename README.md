@@ -1,6 +1,6 @@
 # Embeddings Service
 
-**Port**: 3001
+**Port**: 3011
 
 A high-performance embedding generation and vector search service for the ConFuse platform.
 
