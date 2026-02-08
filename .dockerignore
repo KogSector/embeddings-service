@@ -1,0 +1,18 @@
+# Hybrid Service .dockerignore
+# Ignore everything by default
+**
+
+# Allow build context essentials
+!embeddings-service/
+!shared/
+!Cargo.toml
+!Cargo.lock
+
+# Specific ignores
+embeddings-service/target
+embeddings-service/.env
+embeddings-service/__pycache__
+embeddings-service/.venv
+shared/target
+shared/__pycache__
+shared/.venv

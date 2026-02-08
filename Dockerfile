@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy Rust files
+# Copy Rust files
 COPY Cargo.toml Cargo.lock* ./
 
 # Create dummy src for dependency caching

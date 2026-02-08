@@ -48,8 +48,8 @@ impl Default for Config {
                 workers: 4,
             },
             database: DatabaseConfig {
-                postgres_url: "postgresql://localhost/embeddings".to_string(),
-                redis_url: "redis://localhost".to_string(),
+                postgres_url: String::new(),
+                redis_url: String::new(),
                 max_connections: 10,
             },
             models: ModelConfig {
@@ -71,19 +71,17 @@ impl Config {
         let mut config = Self::default();
         
         // Override with environment variables
-        if let Ok(host) = std::env::var("EMBEDDINGS_HOST") {
-            config.server.host = host;
-        }
-        if let Ok(port) = std::env::var("EMBEDDINGS_PORT") {
-            config.server.port = port.parse().unwrap_or(3001);
-        }
-        if let Ok(postgres_url) = std::env::var("POSTGRES_URL") {
-            config.database.postgres_url = postgres_url;
-        }
-        if let Ok(redis_url) = std::env::var("REDIS_URL") {
-            config.database.redis_url = redis_url;
-        }
-        if let Ok(default_model) = std::env::var("DEFAULT_MODEL") {
+        config.server.host = std::env::var("EMBEDDINGS_HOST")
+            .expect("EMBEDDINGS_HOST must be set");
+        config.server.port = std::env::var("EMBEDDINGS_PORT")
+            .expect("EMBEDDINGS_PORT must be set")
+            .parse()
+            .unwrap_or(3001);
+        config.database.postgres_url = std::env::var("POSTGRES_URL")
+            .expect("POSTGRES_URL must be set");
+        config.database.redis_url = std::env::var("REDIS_URL")
+            .expect("REDIS_URL must be set");
+        if let Ok(default_model) = std::env::var("DEFAULT_EMBEDDING_MODEL") {
             config.models.default_model = default_model;
         }
         
