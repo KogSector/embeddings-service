@@ -22,6 +22,8 @@ pub struct ModelConfig {
     pub models_dir: String,
     pub max_batch_size: usize,
     pub timeout: Duration,
+    pub ollama_url: Option<String>,
+    pub use_ollama: bool,
 }
 
 impl Default for Config {
@@ -37,6 +39,8 @@ impl Default for Config {
                 models_dir: "./models".to_string(),
                 max_batch_size: 32,
                 timeout: Duration::from_secs(30),
+                ollama_url: None,
+                use_ollama: false,
             },
         }
     }
@@ -60,6 +64,10 @@ impl Config {
         if let Ok(batch_size) = std::env::var("MAX_BATCH_SIZE") {
             config.models.max_batch_size = batch_size.parse().unwrap_or(32);
         }
+        config.models.ollama_url = std::env::var("OLLAMA_URL").ok();
+        config.models.use_ollama = std::env::var("USE_OLLAMA")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
 
         Ok(config)
     }

@@ -30,6 +30,9 @@ RUN mkdir -p src/api src/core src/generators src/models src/storage && \
     touch src/lib.rs && \
     touch src/api/mod.rs src/core/mod.rs src/generators/mod.rs src/models/mod.rs src/storage/mod.rs
 
+# Copy shared library
+COPY shared-middleware ./shared-middleware
+
 # Build dependencies (cached)
 RUN cargo build --release 2>/dev/null || true
 
@@ -88,10 +91,10 @@ USER appuser
 
 # Health check optimized for Azure Container Apps
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:3005/health || exit 1
+    CMD curl -f http://localhost:3011/health || exit 1
 
 # Expose port
-EXPOSE 3005
+EXPOSE 3011
 
 # Use dumb-init as PID 1 for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
