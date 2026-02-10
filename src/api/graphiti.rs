@@ -7,10 +7,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use crate::models::ModelManager;
-use crate::storage::PostgresStorage;
 
 #[derive(Debug, Deserialize)]
 pub struct GraphitiEmbeddingRequest {
@@ -65,7 +63,7 @@ pub struct ChunkEmbedding {
 
 #[derive(Debug, Deserialize)]
 pub struct ModelInfoQuery {
-    pub format: Option<String>, // "graphiti" to return Graphiti-compatible models
+    pub format: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -84,7 +82,6 @@ pub async fn generate_graphiti_embeddings(
     Json(request): Json<GraphitiEmbeddingRequest>,
 ) -> Result<Json<GraphitiEmbeddingResponse>, StatusCode> {
     let model_manager = &app_state.model_manager;
-    let storage = &app_state.postgres_storage;
     let model_name = request.model.as_deref().unwrap_or("nomic-embed-text");
     
     // Ensure model is loaded
@@ -106,7 +103,7 @@ pub async fn generate_graphiti_embeddings(
         model: model_name.to_string(),
         dimension,
         usage: Some(GraphitiUsage {
-            prompt_tokens: 0, // TODO: Implement token counting
+            prompt_tokens: 0,
             total_tokens: 0,
         }),
     };
@@ -120,7 +117,6 @@ pub async fn process_chunks(
     Json(request): Json<ChunkEmbeddingRequest>,
 ) -> Result<Json<ChunkEmbeddingResponse>, StatusCode> {
     let model_manager = &app_state.model_manager;
-    let storage = &app_state.postgres_storage;
     let model_name = request.model.as_deref().unwrap_or("nomic-embed-text");
     let batch_size = request.batch_size.unwrap_or(32);
     
@@ -149,7 +145,6 @@ pub async fn process_chunks(
                 }
             }
             Err(e) => {
-                // Mark all chunks in this batch as failed
                 for chunk in chunk_batch {
                     chunk_embeddings.push(ChunkEmbedding {
                         chunk_id: chunk.id.clone(),
@@ -189,14 +184,13 @@ pub async fn list_graphiti_models(
                 name: model_name.clone(),
                 provider: "local".to_string(),
                 dimension: model.dimension(),
-                max_tokens: Some(8192), // Default max tokens
+                max_tokens: Some(8192),
                 supports_graphiti: true,
             };
             models.push(model_info);
         }
     }
 
-    // Add some default models that can be loaded
     models.extend_from_slice(&[
         GraphitiModelInfo {
             id: "nomic-embed-text".to_string(),

@@ -6,10 +6,9 @@ use axum::{
     response::Json,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 use crate::generators::BatchGenerator;
-use crate::models::ModelManager;
+use crate::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct GenerateRequest {
@@ -47,12 +46,13 @@ pub struct ErrorResponse {
 }
 
 pub async fn generate_embeddings(
-    State(model_manager): State<Arc<ModelManager>>,
+    State(app_state): State<AppState>,
     Json(request): Json<GenerateRequest>,
 ) -> Result<Json<GenerateResponse>, StatusCode> {
     let model_name = request.model.unwrap_or_else(|| "sentence-transformers/all-MiniLM-L6-v2".to_string());
+    let model_manager = &app_state.model_manager;
     
-    let generator = BatchGenerator::new((*model_manager).clone());
+    let generator = BatchGenerator::new((**model_manager).clone());
     
     match generator.generate_single(request.text, &model_name).await {
         Ok(embedding) => {
@@ -70,12 +70,13 @@ pub async fn generate_embeddings(
 }
 
 pub async fn generate_batch_embeddings(
-    State(model_manager): State<Arc<ModelManager>>,
+    State(app_state): State<AppState>,
     Json(request): Json<BatchGenerateRequest>,
 ) -> Result<Json<BatchGenerateResponse>, StatusCode> {
     let model_name = request.model.unwrap_or_else(|| "sentence-transformers/all-MiniLM-L6-v2".to_string());
+    let model_manager = &app_state.model_manager;
     
-    let generator = BatchGenerator::new((*model_manager).clone());
+    let generator = BatchGenerator::new((**model_manager).clone());
     
     let batch_request = crate::generators::BatchEmbeddingRequest {
         texts: request.texts,
