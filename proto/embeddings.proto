@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package confuse.embeddings.v1;
+
+// Embeddings service - generates vector embeddings for text content
+service Embeddings {
+  // Single embedding generation
+  rpc Embed(EmbedRequest) returns (EmbedResponse);
+  
+  // Batch embedding generation
+  rpc BatchEmbed(BatchEmbedRequest) returns (BatchEmbedResponse);
+  
+  // Model information
+  rpc GetModelInfo(ModelInfoRequest) returns (ModelInfo);
+}
+
+// Messages
+message EmbedRequest {
+  string text = 1;
+  optional string model = 2;
+  map<string, string> options = 3;
+}
+
+message EmbedResponse {
+  repeated float embeddings = 1;
+  int32 dimension = 2;
+  string model_used = 3;
+}
+
+message BatchEmbedRequest {
+  repeated string texts = 1;
+  optional string model = 2;
+  map<string, string> options = 3;
+}
+
+message BatchEmbedResponse {
+  repeated EmbeddingResult results = 1;
+  string model_used = 2;
+}
+
+message EmbeddingResult {
+  repeated float embeddings = 1;
+  int32 index = 2;
+}
+
+message ModelInfoRequest {
+  optional string model_name = 1;
+}
+
+message ModelInfo {
+  string model_name = 1;
+  int32 dimension = 2;
+  int32 max_sequence_length = 3;
+  string provider = 4;
+}
