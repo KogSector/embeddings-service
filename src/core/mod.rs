@@ -2,6 +2,7 @@
 
 pub mod config;
 pub mod error;
+pub mod kafka;
 
 pub use config::{Config, ModelConfig, ServerConfig};
 pub use error::{EmbeddingError, Result};

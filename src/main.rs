@@ -36,6 +36,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let service = EmbeddingsService::new(config.clone()).await?;
     service.initialize_default_model().await?;
 
+    // Start Kafka consumer
+    if let Err(e) = crate::core::kafka::start_kafka_consumer(service.clone()).await {
+        tracing::warn!("Failed to start Kafka consumer: {}", e);
+    }
+
     let app_state = service.app_state();
 
     // Build router — generate-only endpoints
