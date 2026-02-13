@@ -31,7 +31,7 @@ RUN mkdir -p src/api src/core src/generators src/models src/storage && \
     touch src/api/mod.rs src/core/mod.rs src/generators/mod.rs src/models/mod.rs src/storage/mod.rs
 
 # Copy shared library
-COPY shared-middleware ./shared-middleware
+COPY shared-middleware /shared-middleware
 
 # Build dependencies (cached)
 RUN cargo build --release 2>/dev/null || true
