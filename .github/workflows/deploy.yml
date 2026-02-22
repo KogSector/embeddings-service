@@ -2,109 +2,91 @@ name: Deploy Embeddings Service
 
 on:
   push:
-    branches: [ main, develop ]
-    paths: [ 'embeddings-service/**' ]
+    branches: [main]
+    paths: ['embeddings-service/**']
   pull_request:
-    branches: [ main ]
-    paths: [ 'embeddings-service/**' ]
+    branches: [main]
+    paths: ['embeddings-service/**']
   workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: embeddings-service
+  SERVICE_NAME: embeddings-service
+  DOCKERFILE: Dockerfile
 
 jobs:
-  test:
+  build-and-test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./embeddings-service
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Rust
-      uses: dtolnay/rust-toolchain@stable
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
       with:
-        components: rustfmt, clippy
-
-    - name: Cache Rust dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        node-version: '22'
 
     - name: Install dependencies
-      run: cargo fetch
-
-    - name: Format check
-      run: cargo fmt -- --check
-
-    - name: Clippy check
-      run: cargo clippy -- -D warnings
-
-    - name: Run tests
-      run: cargo test
+      run: npm install
 
     - name: Build
-      run: cargo build --release
+      run: npm run build
 
-  build-and-deploy:
-    needs: test
+  deploy:
+    needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
+    - name: Azure Login
+      uses: azure/login@v2
       with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
+    - name: Login to ACR
+      uses: azure/docker-login@v2
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+        login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: ./embeddings-service
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-    - name: Deploy to Cloud Run
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
-    
-    - name: Deploy to Cloud Run
+    - name: Build and push image
       run: |
-        gcloud run deploy ${{ env.IMAGE_NAME }} \
-          --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-          --region ${{ secrets.GCP_REGION }} \
-          --allow-unauthenticated \
-          --set-env-vars EMBEDDINGS_PORT=3001 \
-          --set-env-vars POSTGRES_URL=${{ secrets.POSTGRES_URL }} \
-          --set-env-vars REDIS_URL=${{ secrets.REDIS_URL }} \
-          --set-env-vars OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
-          --set-env-vars OPENAI_BASE_URL=${{ secrets.OPENAI_BASE_URL }} \
-          --set-env-vars DEFAULT_MODEL=${{ secrets.DEFAULT_MODEL }} \
-          --set-cloud-run-keywords=confuse,embeddings
+        IMAGE_TAG="${{ secrets.ACR_LOGIN_SERVER }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+        IMAGE_LATEST="${{ secrets.ACR_LOGIN_SERVER }}/${{ env.SERVICE_NAME }}:latest"
+        docker build -f ${{ env.DOCKERFILE }} -t $IMAGE_TAG -t $IMAGE_LATEST .
+        docker push $IMAGE_TAG
+        docker push $IMAGE_LATEST
+
+    - name: Set AKS context
+      uses: azure/aks-set-context@v4
+      with:
+        resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+        cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+
+    - name: Update K8s deployment image
+      run: |
+        IMAGE_TAG="${{ secrets.ACR_LOGIN_SERVER }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+        kubectl set image deployment/${{ env.SERVICE_NAME }} \
+          ${{ env.SERVICE_NAME }}=$IMAGE_TAG \
+          -n confuse-platform
+
+    - name: Create K8s Secret from .env
+      run: |
+        kubectl create namespace confuse-platform --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic ${{ env.SERVICE_NAME }}-secrets \
+          --from-env-file=.env \
+          --namespace confuse-platform \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Apply K8s deployment file
+      run: |
+        kubectl apply -f .github/deployment.yaml
+
+    - name: Verify deployment
+      run: |
+        kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
+          -n confuse-platform --timeout=120s
+
