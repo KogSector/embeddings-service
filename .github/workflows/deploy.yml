@@ -3,10 +3,16 @@ name: Deploy Embeddings Service
 on:
   push:
     branches: [main]
-    paths: ['embeddings-service/**']
+    paths:
+      - 'embeddings-service/**'
+      - 'shared-middleware/**'
+      - '.github/workflows/deploy.yml'
   pull_request:
     branches: [main]
-    paths: ['embeddings-service/**']
+    paths:
+      - 'embeddings-service/**'
+      - 'shared-middleware/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 env:
@@ -20,16 +26,23 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
       with:
-        node-version: '22'
+        toolchain: stable
 
-    - name: Install dependencies
-      run: npm install
+    - name: Build shared middleware
+      run: |
+        cd shared-middleware/rust
+        cargo build --release
 
     - name: Build
-      run: npm run build
+      working-directory: ./embeddings-service
+      run: cargo build --release
+
+    - name: Test
+      working-directory: ./embeddings-service
+      run: cargo test
 
   deploy:
     needs: build-and-test
@@ -53,10 +66,11 @@ jobs:
         password: ${{ secrets.ACR_PASSWORD }}
 
     - name: Build and push image
+      working-directory: ./embeddings-service
       run: |
         IMAGE_TAG="${{ secrets.ACR_LOGIN_SERVER }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
         IMAGE_LATEST="${{ secrets.ACR_LOGIN_SERVER }}/${{ env.SERVICE_NAME }}:latest"
-        docker build -f ${{ env.DOCKERFILE }} -t $IMAGE_TAG -t $IMAGE_LATEST .
+        docker build -f ${{ env.DOCKERFILE }} -t $IMAGE_TAG -t $IMAGE_LATEST ..
         docker push $IMAGE_TAG
         docker push $IMAGE_LATEST
 
@@ -67,6 +81,7 @@ jobs:
         cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
 
     - name: Update K8s deployment image
+      working-directory: ./embeddings-service
       run: |
         IMAGE_TAG="${{ secrets.ACR_LOGIN_SERVER }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
         kubectl set image deployment/${{ env.SERVICE_NAME }} \
@@ -74,6 +89,7 @@ jobs:
           -n confuse-platform
 
     - name: Create K8s Secret from .env
+      working-directory: ./embeddings-service
       run: |
         kubectl create namespace confuse-platform --dry-run=client -o yaml | kubectl apply -f -
         kubectl create secret generic ${{ env.SERVICE_NAME }}-secrets \
@@ -82,11 +98,12 @@ jobs:
           --dry-run=client -o yaml | kubectl apply -f -
 
     - name: Apply K8s deployment file
+      working-directory: ./embeddings-service
       run: |
         kubectl apply -f .github/deployment.yaml
 
     - name: Verify deployment
+      working-directory: ./embeddings-service
       run: |
         kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
           -n confuse-platform --timeout=120s
-
