@@ -1,0 +1,84 @@
+# =============================================================================
+# Embeddings Service - Kubernetes Deployment
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embeddings-service
+  namespace: confuse-platform
+  labels:
+    app: embeddings-service
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embeddings-service
+  template:
+    metadata:
+      labels:
+        app: embeddings-service
+        version: v1
+    spec:
+      imagePullSecrets:
+      - name: acr-secret
+      containers:
+      - name: embeddings-service
+        image: "confuseimgr.azurecr.io/embeddings-service:latest"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3011
+          name: http
+        envFrom:
+        - configMapRef:
+            name: global-config
+        - secretRef:
+            name: global-secrets
+        - configMapRef:
+            name: embeddings-service-config
+        - secretRef:
+            name: embeddings-service-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3011
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3011
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          seccompProfile:
+            type: RuntimeDefault
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embeddings-service
+  namespace: confuse-platform
+  labels:
+    app: embeddings-service
+spec:
+  selector:
+    app: embeddings-service
+  ports:
+  - name: http
+    protocol: TCP
+    port: 3011
+    targetPort: 3011
+  type: ClusterIP
