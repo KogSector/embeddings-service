@@ -1,6 +1,52 @@
 # =============================================================================
 # Embeddings Service - Kubernetes Deployment
+# Covers ALL .env variables via ConfigMap (non-sensitive) + Secret (sensitive)
 # =============================================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: embeddings-service-config
+  namespace: confuse-platform
+data:
+  SERVICE_NAME: "embeddings-service"
+  PORT: "3011"
+  GRPC_ENABLED: "false"
+  GRPC_PORT: "50054"
+  HOST: "0.0.0.0"
+  ENVIRONMENT: "production"
+  # Kafka
+  KAFKA_ENABLED: "true"
+  KAFKA_CLIENT_ID: "confuse-embeddings-service"
+  KAFKA_GROUP_ID: "confuse-embeddings-service-group"
+  # Embedding Model
+  DEFAULT_EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+  EMBEDDING_DIMENSION: "384"
+  MAX_BATCH_SIZE: "32"
+  USE_GPU: "false"
+  # Ollama (Optional)
+  OLLAMA_URL: "http://ollama:11434"
+  USE_OLLAMA: "false"
+  # Feature Toggle
+  FEATURE_TOGGLE_SERVICE_URL: "http://feature-toggle:3099"
+  # CORS
+  CORS_ORIGINS: "https://confuse.platform.example.com"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: embeddings-service-secrets
+  namespace: confuse-platform
+type: Opaque
+stringData:
+  # Confluent Cloud (REQUIRED)
+  CONFLUENT_BOOTSTRAP_SERVERS: "CHANGEME_CONFLUENT_BOOTSTRAP_SERVERS"
+  CONFLUENT_API_KEY: "CHANGEME_CONFLUENT_API_KEY"
+  CONFLUENT_API_SECRET: "CHANGEME_CONFLUENT_API_SECRET"
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,10 +77,6 @@ spec:
           name: http
         envFrom:
         - configMapRef:
-            name: global-config
-        - secretRef:
-            name: global-secrets
-        - configMapRef:
             name: embeddings-service-config
         - secretRef:
             name: embeddings-service-secrets
@@ -61,9 +103,6 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
-        securityContext:
-          seccompProfile:
-            type: RuntimeDefault
 
 ---
 apiVersion: v1
@@ -71,8 +110,6 @@ kind: Service
 metadata:
   name: embeddings-service
   namespace: confuse-platform
-  labels:
-    app: embeddings-service
 spec:
   selector:
     app: embeddings-service
