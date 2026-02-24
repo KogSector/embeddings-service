@@ -14,6 +14,8 @@ pub struct ServerConfig {
     pub host: String,
     pub port: u16,
     pub workers: usize,
+    pub grpc_host: String,
+    pub grpc_port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +35,8 @@ impl Default for Config {
                 host: "0.0.0.0".to_string(),
                 port: 3011,
                 workers: 4,
+                grpc_host: "0.0.0.0".to_string(),
+                grpc_port: 50054,
             },
             models: ModelConfig {
                 default_model: "sentence-transformers/all-MiniLM-L6-v2".to_string(),
@@ -58,6 +62,13 @@ impl Config {
             .unwrap_or_else(|_| "3011".to_string())
             .parse()
             .unwrap_or(3011);
+        
+        config.server.grpc_host = std::env::var("GRPC_HOST")
+            .unwrap_or_else(|_| "0.0.0.0".to_string());
+        config.server.grpc_port = std::env::var("GRPC_PORT")
+            .unwrap_or_else(|_| "50054".to_string())
+            .parse()
+            .unwrap_or(50054);
         if let Ok(default_model) = std::env::var("DEFAULT_EMBEDDING_MODEL") {
             config.models.default_model = default_model;
         }
