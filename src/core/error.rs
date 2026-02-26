@@ -25,6 +25,9 @@ pub enum EmbeddingError {
     #[error("Neo4j error: {0}")]
     Neo4jError(#[from] neo4rs::Error),
     
+    #[error("Connection error: {0}")]
+    ConnectionError(String),
+    
     #[error("Python error: {0}")]
     PythonError(String),
     
