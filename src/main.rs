@@ -1,4 +1,5 @@
-//! Main entry point for the embeddings service (generate-only)
+//! Main entry point for the embeddings service
+//! Kafka-streamed pipeline: consumes chunks.raw → generates embeddings → produces chunks.embedded
 
 use axum::{
     routing::{get, post},
@@ -31,15 +32,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration
     let config = Config::from_env()?;
     tracing::info!("Starting embeddings service on {}:{}", config.server.host, config.server.port);
+    tracing::info!("gRPC server on {}:{}", config.grpc_host, config.grpc_port);
 
     // Initialize service (no storage initialization needed)
     let service = EmbeddingsService::new(config.clone()).await?;
     service.initialize_default_model().await?;
-
-    // Start Kafka consumer
-    if let Err(e) = crate::core::kafka::start_kafka_consumer(service.clone()).await {
-        tracing::warn!("Failed to start Kafka consumer: {}", e);
-    }
 
     let app_state = service.app_state();
 
@@ -86,6 +83,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Start Kafka consumer pipeline (chunks.raw → embed → chunks.embedded)
+    let kafka_service = service.clone();
+    let kafka_handle = tokio::spawn(async move {
+        if let Err(e) = run_kafka_pipeline(kafka_service).await {
+            tracing::error!("Kafka pipeline failed: {}", e);
+        }
+    });
+
     // Start HTTP server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
     tracing::info!("Server listening on {}", addr);
@@ -93,8 +98,97 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
 
-    // Wait for gRPC server to finish
+    // Wait for background tasks
     let _ = grpc_handle.await;
+    let _ = kafka_handle.await;
 
+    Ok(())
+}
+
+/// Run the Kafka streaming pipeline:
+/// Consume from chunks.raw → generate embeddings → produce to chunks.embedded
+async fn run_kafka_pipeline(service: EmbeddingsService) -> Result<(), Box<dyn std::error::Error>> {
+    use confuse_common::events::{EventProducer, Topics};
+    use rdkafka::consumer::{Consumer, StreamConsumer};
+    use rdkafka::ClientConfig;
+    use rdkafka::message::Message;
+    use futures::StreamExt;
+    
+    let bootstrap_servers = std::env::var("KAFKA_BOOTSTRAP_SERVERS")
+        .unwrap_or_else(|_| "localhost:9092".to_string());
+    let group_id = std::env::var("KAFKA_GROUP_ID")
+        .unwrap_or_else(|_| "embeddings-service".to_string());
+    
+    // Create consumer
+    let consumer: StreamConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &bootstrap_servers)
+        .set("group.id", &group_id)
+        .set("enable.auto.commit", "false")
+        .set("auto.offset.reset", "earliest")
+        .set("session.timeout.ms", "45000")
+        .create()
+        .map_err(|e| format!("Kafka consumer creation failed: {}", e))?;
+    
+    consumer.subscribe(&[Topics::CHUNKS_RAW])
+        .map_err(|e| format!("Kafka subscribe failed: {}", e))?;
+    
+    // Create producer for chunks.embedded
+    let producer = EventProducer::from_env()
+        .map_err(|e| format!("Kafka producer creation failed: {}", e))?;
+    
+    tracing::info!("Kafka pipeline started: consuming from {} → producing to {}", 
+        Topics::CHUNKS_RAW, Topics::CHUNKS_EMBEDDED);
+    
+    let mut stream = consumer.stream();
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok(msg) => {
+                if let Some(payload) = msg.payload() {
+                    match serde_json::from_slice::<serde_json::Value>(payload) {
+                        Ok(chunk_msg) => {
+                            let content = chunk_msg.get("content")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            
+                            // Generate embedding
+                            match service.generate_embedding(content).await {
+                                Ok(embedding) => {
+                                    // Build embedded chunk message (original + embedding)
+                                    let mut embedded = chunk_msg.clone();
+                                    if let Some(obj) = embedded.as_object_mut() {
+                                        obj.insert("embedding".to_string(), 
+                                            serde_json::json!(embedding));
+                                        obj.insert("model_used".to_string(),
+                                            serde_json::json!("sentence-transformers/all-MiniLM-L6-v2"));
+                                    }
+                                    
+                                    if let Err(e) = producer.publish_to_topic(&embedded, Topics::CHUNKS_EMBEDDED).await {
+                                        tracing::error!("Failed to publish embedded chunk: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!("Embedding generation failed: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to deserialize chunk message: {}", e);
+                        }
+                    }
+                }
+                
+                // Commit offset
+                if let Err(e) = rdkafka::consumer::Consumer::commit_message(
+                    &consumer, &msg, rdkafka::consumer::CommitMode::Async
+                ) {
+                    tracing::warn!("Failed to commit offset: {}", e);
+                }
+            }
+            Err(e) => {
+                tracing::error!("Kafka consumer error: {}", e);
+            }
+        }
+    }
+    
     Ok(())
 }

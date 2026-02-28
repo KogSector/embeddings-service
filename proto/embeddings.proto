@@ -3,6 +3,7 @@ syntax = "proto3";
 package confuse.embeddings.v1;
 
 // Embeddings service - generates vector embeddings for text content
+// Pure generation service - no storage
 service Embeddings {
   // Single embedding generation
   rpc Embed(EmbedRequest) returns (EmbedResponse);
@@ -19,18 +20,21 @@ message EmbedRequest {
   string text = 1;
   optional string model = 2;
   map<string, string> options = 3;
+  optional string chunk_id = 4;  // Track which chunk this embedding belongs to
 }
 
 message EmbedResponse {
   repeated float embeddings = 1;
   int32 dimension = 2;
   string model_used = 3;
+  string chunk_id = 4;
 }
 
 message BatchEmbedRequest {
   repeated string texts = 1;
   optional string model = 2;
   map<string, string> options = 3;
+  repeated string chunk_ids = 4;  // Corresponding chunk IDs for each text
 }
 
 message BatchEmbedResponse {
@@ -41,6 +45,7 @@ message BatchEmbedResponse {
 message EmbeddingResult {
   repeated float embeddings = 1;
   int32 index = 2;
+  string chunk_id = 3;
 }
 
 message ModelInfoRequest {
