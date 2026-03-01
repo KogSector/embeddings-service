@@ -843,8 +843,6 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Chunk text cannot be empty"));
     }
-}
-}
 
     #[test]
     fn test_vector_metrics_creation() {
@@ -888,3 +886,4 @@ mod tests {
         assert_eq!(metrics.storage_success.get(), 2.0);
         assert_eq!(metrics.storage_failure.get(), 1.0);
     }
+}
