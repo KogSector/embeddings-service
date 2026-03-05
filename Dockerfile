@@ -22,7 +22,10 @@ WORKDIR /app
 
 # Copy Rust files
 # Copy Rust files
-COPY Cargo.toml Cargo.lock* ./
+COPY embeddings-service/Cargo.toml embeddings-service/Cargo.lock* ./
+
+# Fix confuse-common path if present
+RUN sed -i 's|path = "../shared-middleware/rust/confuse-common"|path = "./shared-middleware/rust/confuse-common"|g' Cargo.toml && rm -f Cargo.lock
 
 # Create dummy src for dependency caching
 RUN mkdir -p src/api src/core src/generators src/models src/storage && \
@@ -31,7 +34,7 @@ RUN mkdir -p src/api src/core src/generators src/models src/storage && \
     touch src/api/mod.rs src/core/mod.rs src/generators/mod.rs src/models/mod.rs src/storage/mod.rs
 
 # Copy shared library
-COPY shared-middleware /shared-middleware
+COPY shared-middleware ./shared-middleware
 
 # Build dependencies (cached)
 RUN cargo build --release 2>/dev/null || true
@@ -40,7 +43,7 @@ RUN cargo build --release 2>/dev/null || true
 RUN rm -rf src/*
 
 # Copy actual source
-COPY src/ ./src/
+COPY embeddings-service/src/ ./src/
 
 # Build the application
 RUN cargo build --release
@@ -80,13 +83,14 @@ COPY --from=python-builder /usr/local/bin /usr/local/bin
 COPY --from=rust-builder /app/target/release/embeddings-service /usr/local/bin/
 
 # Copy application source for Python modules
-COPY src/ ./src/
+COPY embeddings-service/src/ ./src/
 
 # Set Python path
 ENV PYTHONPATH=/app/src
 
 # Create non-root user
-RUN useradd -m -r appuser && chown -R appuser:appuser /app
+WORKDIR /app
+RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Health check optimized for Azure Container Apps
