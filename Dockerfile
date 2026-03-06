@@ -90,7 +90,7 @@ ENV PYTHONPATH=/app/src
 
 # Create non-root user
 WORKDIR /app
-RUN useradd -m appuser && chown -R appuser:appuser /app
+RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Health check optimized for Azure Container Apps

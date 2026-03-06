@@ -19,6 +19,7 @@ use embeddings_service::{
     core::Config,
     EmbeddingsService,
 };
+use confuse_common::events::{EventConsumer, EventProducer, Topics, ChunkRawEvent, ChunkEnrichedEvent, EmbeddingGeneratedEvent};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -83,6 +84,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Start Kafka consumer for chunks.raw
+    let kafka_service = service.clone();
+    let kafka_handle = tokio::spawn(async move {
+        if let Err(e) = start_kafka_consumer(kafka_service).await {
+            tracing::error!("Kafka consumer failed: {}", e);
+        }
+    });
+
     // Start HTTP server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
     tracing::info!("Server listening on {}", addr);
@@ -92,6 +101,94 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Wait for background tasks
     let _ = grpc_handle.await;
+    let _ = kafka_handle.await;
 
     Ok(())
+}
+
+/// Start Kafka consumer to process chunks.raw events
+async fn start_kafka_consumer(service: EmbeddingsService) -> anyhow::Result<()> {
+    let bootstrap_servers = std::env::var("KAFKA_BOOTSTRAP_SERVERS")
+        .unwrap_or_else(|_| "localhost:9092".to_string());
+    let group_id = std::env::var("KAFKA_GROUP_ID")
+        .unwrap_or_else(|_| "embeddings-service".to_string());
+    
+    let consumer = confuse_common::events::EventConsumer::new(&bootstrap_servers, &group_id)?;
+    
+    tracing::info!("Starting Kafka consumer for chunks.raw");
+    
+    consumer.subscribe(&[Topics::CHUNKS_RAW]).await?;
+    
+    let mut stream = consumer.stream();
+    
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok(msg) => {
+                if let Some(payload) = msg.payload() {
+                    match serde_json::from_slice::<ChunkRawEvent>(payload) {
+                        Ok(chunk_event) => {
+                            // Process chunk and generate embeddings
+                            if let Err(e) = process_chunk_with_embeddings(&service, &chunk_event).await {
+                                tracing::error!("Failed to process chunk {}: {}", chunk_event.chunk_id, e);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to deserialize chunk event: {}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("Kafka consumer error: {}", e);
+            }
+        }
+    }
+    
+    tracing::info!("Kafka consumer stopped");
+    Ok(())
+}
+
+/// Process a single chunk and generate embeddings
+async fn process_chunk_with_embeddings(
+    service: &EmbeddingsService, 
+    chunk_event: &ChunkRawEvent
+) -> anyhow::Result<()> {
+    // Generate embeddings for the chunk content
+    let embedding_result = service.generate_embeddings_internal(
+        &chunk_event.content,
+        Some(&chunk_event.chunk_id),
+        &chunk_event.source_id,
+        &chunk_event.file_id,
+    ).await?;
+    
+    // Publish chunks.embedded event back to unified-processor
+    let bootstrap_servers = std::env::var("KAFKA_BOOTSTRAP_SERVERS")
+        .unwrap_or_else(|_| "localhost:9092".to_string());
+    
+    let producer = confuse_common::events::EventProducer::new(&bootstrap_servers)?;
+    
+    let enriched_event = ChunkEnrichedEvent {
+        headers: confuse_common::events::EventHeaders::new(
+            "embeddings-service",
+            "chunk.enriched"
+        )
+        .with_correlation_id(&chunk_event.chunk_id),
+        metadata: confuse_common::events::EventMetadata::default(),
+        source_id: chunk_event.source_id.clone(),
+        file_id: chunk_event.file_id.clone(),
+        chunk_id: chunk_event.chunk_id.clone(),
+        content: chunk_event.content.clone(),
+        chunk_type: chunk_event.chunk_type.clone(),
+        entity_hints: chunk_event.entity_hints.clone(),
+        relationship_context: chunk_event.relationship_context.clone(),
+        embedding: Some(embedding_result.embeddings),
+        quality_score: Some(embedding_result.quality_score),
+        created_at: chrono::Utc::now(),
+    };
+    
+    producer.publish(Topics::CHUNKS_EMBEDDED, &enriched_event).await?;
+    
+    tracing::info!("Processed chunk {} and published embeddings", chunk_event.chunk_id);
+    Ok(())
+}
 }
