@@ -23,7 +23,9 @@ use confuse_common::events::{EventConsumer, EventProducer, Topics, ChunkRawEvent
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenvy::dotenv().ok();
+    // Load environment variables from .env.map (non-sensitive) and .env.secret (sensitive overrides)
+    dotenvy::from_filename(".env.map").ok();
+    dotenvy::from_filename(".env.secret").ok();
     // Initialize tracing
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
