@@ -193,4 +193,3 @@ async fn process_chunk_with_embeddings(
     tracing::info!("Processed chunk {} and published embeddings", chunk_event.chunk_id);
     Ok(())
 }
-}

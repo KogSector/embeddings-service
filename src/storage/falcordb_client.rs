@@ -308,7 +308,6 @@ impl FalcorDBClient {
         debug!("Attempting connection to FalcorDB at {}", uri);
 
         let graph = Graph::new(uri, &config.username, &config.password)
-            .await
             .map_err(|e| {
                 EmbeddingError::ConfigError(format!("Failed to create Graph connection: {}", e))
             })?;
@@ -442,7 +441,7 @@ impl FalcorDBClient {
                     duration_ms = duration.as_millis(),
                     "Failed to extract ID from result"
                 );
-                EmbeddingError::Neo4jError(e)
+                EmbeddingError::Neo4jError(e.into())
             })?;
             
             let duration = start.elapsed();
@@ -567,7 +566,7 @@ impl FalcorDBClient {
                 EmbeddingError::Neo4jError(e)
             })?;
 
-            if let Some(row) = result.next().await.map_err(|e| {
+            if let Some(row) = result.next(&mut txn).await.map_err(|e| {
                 let duration = start.elapsed();
                 VECTOR_METRICS.record_failure(duration);
                 error!(
@@ -578,7 +577,7 @@ impl FalcorDBClient {
                     duration_ms = duration.as_millis(),
                     "Failed to retrieve chunk ID in batch transaction"
                 );
-                EmbeddingError::Neo4jError(e)
+                EmbeddingError::Neo4jError(e.into())
             })? {
                 let id: String = row.get("id").map_err(|e| {
                     let duration = start.elapsed();
@@ -591,7 +590,7 @@ impl FalcorDBClient {
                         duration_ms = duration.as_millis(),
                         "Failed to extract ID from batch transaction result"
                     );
-                    EmbeddingError::Neo4jError(e)
+                    EmbeddingError::Neo4jError(e.into())
                 })?;
                 ids.push(id);
             } else {
