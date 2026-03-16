@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // FalcorDB endpoints
         .route("/api/v1/falcordb/store", post(store_embeddings_falcordb))
         .route("/api/v1/falcordb/stats", get(get_falcordb_stats))
-        .route("/api/v1/falcordb/test", get(test_falcordb_connection))
+        .route("/api/v1/falcordb/test", axum::routing::get_service(test_falcordb_connection))
         .with_state(app_state)
         .layer(axum::middleware::from_fn(confuse_common::middleware::security_headers_middleware))
         .layer(axum::middleware::from_fn(confuse_common::middleware::zero_trust_middleware))

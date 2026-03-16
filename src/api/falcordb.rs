@@ -2,7 +2,7 @@
 
 use crate::models::ModelManager;
 use crate::storage::falcordb_client::{FalcorDBClient, VectorChunk};
-use crate::core::{EmbeddingError, Result};
+use crate::core::EmbeddingError;
 use axum::{
     extract::{Query, State},
     response::Json,
@@ -68,20 +68,20 @@ impl Default for FusionMethod {
 pub async fn store_embeddings_falcordb(
     Query(params): Query<FalcorDBEmbeddingRequest>,
     State(app_state): State<crate::AppState>,
-) -> Result<Json<FalcorDBEmbeddingResponse>> {
+) -> Result<Json<FalcorDBEmbeddingResponse>, EmbeddingError> {
     let start_time = std::time::Instant::now();
 
     // Validate request
     if params.texts.is_empty() {
-        return Err(core::error::EmbeddingError::InvalidInput("No texts provided for embedding generation".to_string()));
+        return Err(EmbeddingError::InvalidInput("No texts provided for embedding generation".to_string()));
     }
 
     if params.texts.len() != params.chunk_ids.len() {
-        return Err(core::error::EmbeddingError::InvalidInput("Texts and chunk IDs must have the same length".to_string()));
+        return Err(EmbeddingError::InvalidInput("Texts and chunk IDs must have the same length".to_string()));
     }
 
     if params.store_in_falcordb && app_state.falcordb_client.is_none() {
-        return Err(core::error::EmbeddingError::ConfigError("FalcorDB storage requested but client not available".to_string()));
+        return Err(EmbeddingError::ConfigError("FalcorDB storage requested but client not available".to_string()));
     }
 
     // Generate embeddings for all texts
@@ -96,18 +96,30 @@ pub async fn store_embeddings_falcordb(
     };
 
     for model in &models {
-        match app_state.model_manager.generate(&params.texts, model).await {
-            Ok(embeddings) => {
-                embeddings_map.insert(model.clone(), embeddings);
-                models_used.push(model.clone());
+        match app_state.model_manager.ensure_model_loaded(model).await {
+            Ok(model_instance) => {
+                match model_instance.generate(params.texts.clone()).await {
+                    Ok(embeddings) => {
+                        embeddings_map.insert(model.clone(), embeddings);
+                        models_used.push(model.clone());
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            model = %model,
+                            error = %e,
+                            "Failed to generate embeddings with model"
+                        );
+                        return Err(EmbeddingError::GenerationError(format!("Failed to generate embeddings with model {}: {}", model, e)));
+                    }
+                }
             }
             Err(e) => {
                 tracing::error!(
                     model = %model,
                     error = %e,
-                    "Failed to generate embeddings with model"
+                    "Failed to load model"
                 );
-                return Err(core::error::EmbeddingError::GenerationError(format!("Failed to generate embeddings with model {}: {}", model, e)));
+                return Err(EmbeddingError::ModelNotFound(model.clone()));
             }
         }
     }
@@ -157,7 +169,7 @@ pub async fn store_embeddings_falcordb(
                         error = %e,
                         "Failed to store embeddings in FalcorDB"
                     );
-                    return Err(core::error::EmbeddingError::ConnectionError(format!("Failed to store embeddings in FalcorDB: {}", e)));
+                    return Err(EmbeddingError::ConnectionError(format!("Failed to store embeddings in FalcorDB: {}", e)));
                 }
             }
         }
@@ -213,7 +225,7 @@ pub async fn store_embeddings_falcordb(
 async fn fuse_embeddings(
     embeddings_map: &HashMap<String, Vec<Vec<f32>>>,
     method: &FusionMethod,
-) -> Result<Vec<Vec<f32>>> {
+) -> Result<Vec<Vec<f32>>, EmbeddingError> {
     let embedding_dim = embeddings_map.values().next().map(|v| v[0].len()).unwrap_or(0);
     let mut fused_embeddings = Vec::with_capacity(embeddings_map.values().next().map(|v| v.len()).unwrap_or(0));
 
@@ -291,7 +303,7 @@ fn calculate_embedding_quality(embedding: &[f32]) -> f32 {
 /// Get FalcorDB statistics
 pub async fn get_falcordb_stats(
     State(app_state): State<crate::AppState>,
-) -> Result<Json<serde_json::Value>> {
+) -> Result<Json<serde_json::Value>, EmbeddingError> {
     if let Some(ref falcordb_client) = app_state.falcordb_client {
         match falcordb_client.health_check().await {
             Ok(_) => {
@@ -314,7 +326,7 @@ pub async fn get_falcordb_stats(
             }
             Err(e) => {
                 tracing::error!(error = %e, "FalcorDB health check failed");
-                return Err(core::error::EmbeddingError::ConnectionError(format!("FalcorDB health check failed: {}", e)));
+                return Err(EmbeddingError::ConnectionError(format!("FalcorDB health check failed: {}", e)));
             }
         }
     } else {
@@ -331,7 +343,7 @@ pub async fn get_falcordb_stats(
 /// Test FalcorDB connectivity
 pub async fn test_falcordb_connection(
     State(app_state): State<crate::AppState>,
-) -> Result<Json<serde_json::Value>> {
+) -> Result<Json<serde_json::Value>, EmbeddingError> {
     if let Some(ref falcordb_client) = app_state.falcordb_client {
         match falcordb_client.health_check().await {
             Ok(_) => {
@@ -348,12 +360,12 @@ pub async fn test_falcordb_connection(
             }
             Err(e) => {
                 tracing::error!(error = %e, "FalcorDB connection test failed");
-                return Err(core::error::EmbeddingError::ConnectionError(format!("FalcorDB connection test failed: {}", e)));
-                return Err(core::error::EmbeddingError::ConfigError("FalcorDB client not available".to_string()));
+                return Err(EmbeddingError::ConnectionError(format!("FalcorDB connection test failed: {}", e)));
+                return Err(EmbeddingError::ConfigError("FalcorDB client not available".to_string()));
             }
         }
     } else {
-        return Err(core::error::EmbeddingError::ConfigError("FalcorDB client not available".to_string()));
+        return Err(EmbeddingError::ConfigError("FalcorDB client not available".to_string()));
     }
 }
 

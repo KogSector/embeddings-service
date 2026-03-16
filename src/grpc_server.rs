@@ -11,6 +11,7 @@ use crate::proto::confuse::embeddings::v1::{
     embeddings_server::Embeddings,
     EmbedRequest, EmbedResponse, BatchEmbedRequest, BatchEmbedResponse,
     ModelInfoRequest, ModelInfo, EmbeddingResult,
+    ProcessChunksRequest, ProcessChunksResponse, ChunkData, ChunkResult,
 };
 
 pub struct EmbeddingsGrpcService {
@@ -107,6 +108,35 @@ impl Embeddings for EmbeddingsGrpcService {
             Err(e) => {
                 tracing::error!("Failed to get model info: {}", e);
                 Err(Status::internal(format!("Model info retrieval failed: {}", e)))
+            }
+        }
+    }
+
+    async fn process_and_store_chunks(
+        &self,
+        request: Request<ProcessChunksRequest>,
+    ) -> Result<Response<ProcessChunksResponse>, Status> {
+        let req = request.into_inner();
+        
+        tracing::info!("Processing and storing {} chunks", req.chunks.len());
+        
+        let model = req.model.unwrap_or_else(|| self.config.default_model.clone());
+        let options = req.options;
+        
+        match self.service.process_and_store_chunks(req.chunks, &model, options).await {
+            Ok(result) => {
+                Ok(Response::new(ProcessChunksResponse {
+                    results: result.results,
+                    model_used: result.model_used,
+                    total_chunks: result.total_chunks,
+                    chunks_stored: result.chunks_stored,
+                    chunks_failed: result.chunks_failed,
+                    errors: result.errors,
+                }))
+            }
+            Err(e) => {
+                tracing::error!("Failed to process and store chunks: {}", e);
+                Err(Status::internal(format!("Chunk processing and storage failed: {}", e)))
             }
         }
     }

@@ -250,7 +250,7 @@ impl FalcorDBClient {
         let connection_string = if config.password.is_empty() {
             format!("redis://{}:{}", config.host, config.port)
         } else {
-            format!("redis://:{}@{}:{}", config.username, config.password, config.host, config.port)
+            format!("redis://{}:{}@{}:{}", config.username, config.password, config.host, config.port)
         };
 
         let client = Client::open(connection_string.as_str())
