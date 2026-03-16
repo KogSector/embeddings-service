@@ -1,13 +1,14 @@
 //! FalcorDB Client Module
 //!
-//! Provides connection management and operations for FalcorDB (Neo4j-based graph database)
+//! Provides connection management and operations for FalcorDB (Redis wire protocol)
 //! with native vector storage capabilities.
 
 use crate::core::{EmbeddingError, Result};
 use chrono::{DateTime, Utc};
-use neo4rs::{Graph, Query};
 use prometheus::{Counter, Histogram, HistogramOpts, Opts, Registry};
+use redis::{Client, RedisResult};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
@@ -174,9 +175,9 @@ impl Default for FalcorDBConfig {
         Self {
             host: "localhost".to_string(),
             port: 6379,
-            username: "neo4j".to_string(),
+            username: "falkor".to_string(),
             password: String::new(),
-            database: "neo4j".to_string(),
+            database: "falkordb".to_string(),
             vector_dimension: 384,
             similarity_threshold: 0.75,
             max_results: 100,
@@ -198,11 +199,11 @@ impl FalcorDBConfig {
                 .parse()
                 .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALCORDB_PORT: {}", e)))?,
             username: std::env::var("FALCORDB_USERNAME")
-                .unwrap_or_else(|_| "neo4j".to_string()),
+                .unwrap_or_else(|_| "falkor".to_string()),
             password: std::env::var("FALCORDB_PASSWORD")
                 .map_err(|_| EmbeddingError::ConfigError("FALCORDB_PASSWORD not set".to_string()))?,
             database: std::env::var("FALCORDB_DATABASE")
-                .unwrap_or_else(|_| "neo4j".to_string()),
+                .unwrap_or_else(|_| "falkordb".to_string()),
             vector_dimension: std::env::var("FALCORDB_VECTOR_DIMENSION")
                 .unwrap_or_else(|_| "384".to_string())
                 .parse()
@@ -234,7 +235,7 @@ impl FalcorDBConfig {
 /// FalcorDB client with connection pooling and retry logic
 #[derive(Clone)]
 pub struct FalcorDBClient {
-    graph: Arc<Graph>,
+    client: Arc<Client>,
     config: FalcorDBConfig,
 }
 
@@ -246,102 +247,52 @@ impl FalcorDBClient {
             config.host, config.port, config.connection_pool_size
         );
 
-        let uri = format!("bolt://{}:{}", config.host, config.port);
-        
-        // Attempt connection with retry logic
-        let graph = Self::connect_with_retry(&uri, &config).await?;
+        let connection_string = if config.password.is_empty() {
+            format!("redis://{}:{}", config.host, config.port)
+        } else {
+            format!("redis://:{}@{}:{}", config.username, config.password, config.host, config.port)
+        };
+
+        let client = Client::open(connection_string.as_str())
+            .map_err(|e| EmbeddingError::ConfigError(format!("Failed to create FalcorDB client: {}", e)))?;
+
+        // Test connection
+        let mut conn = client.get_multiplexed_async_connection().await
+            .map_err(|e| EmbeddingError::ConfigError(format!("Failed to get FalcorDB connection: {}", e)))?;
+
+        let _: String = redis::cmd("PING")
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| EmbeddingError::ConfigError(format!("FalcorDB ping failed: {}", e)))?;
 
         info!("FalcorDB client initialized successfully");
 
         Ok(Self {
-            graph: Arc::new(graph),
+            client: Arc::new(client),
             config,
         })
-    }
-
-    /// Connect to FalcorDB with exponential backoff retry logic
-    async fn connect_with_retry(uri: &str, config: &FalcorDBConfig) -> Result<Graph> {
-        const MAX_RETRIES: u32 = 5;
-        const INITIAL_BACKOFF_MS: u64 = 100;
-
-        let mut retry_count = 0;
-        let mut backoff_ms = INITIAL_BACKOFF_MS;
-
-        loop {
-            match Self::attempt_connection(uri, config).await {
-                Ok(graph) => {
-                    if retry_count > 0 {
-                        info!("Successfully connected to FalcorDB after {} retries", retry_count);
-                    }
-                    return Ok(graph);
-                }
-                Err(e) => {
-                    retry_count += 1;
-                    
-                    if retry_count >= MAX_RETRIES {
-                        error!(
-                            "Failed to connect to FalcorDB after {} attempts: {}",
-                            MAX_RETRIES, e
-                        );
-                        return Err(EmbeddingError::ConfigError(format!(
-                            "Failed to connect to FalcorDB after {} retries: {}",
-                            MAX_RETRIES, e
-                        )));
-                    }
-
-                    warn!(
-                        "Failed to connect to FalcorDB (attempt {}/{}): {}. Retrying in {}ms...",
-                        retry_count, MAX_RETRIES, e, backoff_ms
-                    );
-
-                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
-                    
-                    // Exponential backoff with jitter
-                    backoff_ms = (backoff_ms * 2).min(5000);
-                }
-            }
-        }
-    }
-
-    /// Attempt a single connection to FalcorDB
-    async fn attempt_connection(uri: &str, config: &FalcorDBConfig) -> Result<Graph> {
-        debug!("Attempting connection to FalcorDB at {}", uri);
-
-        let graph = Graph::new(uri, &config.username, &config.password)
-            .map_err(|e| {
-                EmbeddingError::ConfigError(format!("Failed to create Graph connection: {}", e))
-            })?;
-
-        Ok(graph)
     }
 
     /// Health check to verify FalcorDB connectivity
     pub async fn health_check(&self) -> Result<()> {
         debug!("Performing FalcorDB health check");
 
-        let query = Query::new("RETURN 1 as health".to_string());
-        
-        let mut result = self.graph.execute(query).await.map_err(|e| {
-            error!("FalcorDB health check failed: {}", e);
-            EmbeddingError::ConfigError(format!("Health check failed: {}", e))
-        })?;
+        let mut conn = self.client.get_multiplexed_async_connection().await
+            .map_err(|e| {
+                error!("FalcorDB health check failed: {}", e);
+                EmbeddingError::ConfigError(format!("Health check failed: {}", e))
+            })?;
 
-        if result.next().await.map_err(|e| {
-            EmbeddingError::ConfigError(format!("Health check result error: {}", e))
-        })?.is_some() {
-            debug!("FalcorDB health check passed");
-            Ok(())
-        } else {
-            error!("FalcorDB health check returned no results");
-            Err(EmbeddingError::ConfigError(
-                "Health check failed: no results".to_string(),
-            ))
-        }
-    }
+        let _: String = redis::cmd("PING")
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| {
+                error!("FalcorDB health check ping failed: {}", e);
+                EmbeddingError::ConfigError(format!("Health check ping failed: {}", e))
+            })?;
 
-    /// Get the underlying Graph connection
-    pub fn graph(&self) -> &Graph {
-        &self.graph
+        debug!("FalcorDB health check passed");
+        Ok(())
     }
 
     /// Get the configuration
@@ -378,94 +329,80 @@ impl FalcorDBClient {
             "Storing vector chunk"
         );
 
-        let query = Query::new(
-            r#"
-            CREATE (vc:Vector_Chunk {
-                id: $id,
-                embedding: $embedding,
-                chunk_text: $chunk_text,
-                chunk_index: $chunk_index,
-                document_id: $document_id,
-                source_id: $source_id,
-                created_at: datetime($created_at),
-                updated_at: datetime($updated_at),
-                metadata: $metadata
-            })
-            RETURN vc.id as id
-            "#
-            .to_string(),
-        )
-        .param("id", chunk.id.to_string())
-        .param("embedding", chunk.embedding.clone())
-        .param("chunk_text", chunk.chunk_text.clone())
-        .param("chunk_index", chunk.chunk_index as i64)
-        .param("document_id", chunk.document_id.to_string())
-        .param("source_id", chunk.source_id.clone())
-        .param("created_at", chunk.created_at.to_rfc3339())
-        .param("updated_at", chunk.updated_at.to_rfc3339())
-        .param("metadata", serde_json::to_string(&chunk.metadata)?);
-
-        let mut result = self.graph.execute(query).await.map_err(|e| {
-            let duration = start.elapsed();
-            VECTOR_METRICS.record_failure(duration);
-            error!(
-                chunk_id = %chunk.id,
-                document_id = %chunk.document_id,
-                chunk_index = chunk.chunk_index,
-                error = %e,
-                duration_ms = duration.as_millis(),
-                "Failed to store vector chunk"
-            );
-            EmbeddingError::Neo4jError(e)
-        })?;
-
-        if let Some(row) = result.next().await.map_err(|e| {
-            let duration = start.elapsed();
-            VECTOR_METRICS.record_failure(duration);
-            error!(
-                chunk_id = %chunk.id,
-                document_id = %chunk.document_id,
-                error = %e,
-                duration_ms = duration.as_millis(),
-                "Failed to retrieve stored chunk ID"
-            );
-            EmbeddingError::Neo4jError(e)
-        })? {
-            let id: String = row.get("id").map_err(|e| {
+        let mut conn = self.client.get_multiplexed_async_connection().await
+            .map_err(|e| {
                 let duration = start.elapsed();
                 VECTOR_METRICS.record_failure(duration);
                 error!(
                     chunk_id = %chunk.id,
                     document_id = %chunk.document_id,
+                    chunk_index = chunk.chunk_index,
                     error = %e,
                     duration_ms = duration.as_millis(),
-                    "Failed to extract ID from result"
+                    "Failed to get FalcorDB connection"
                 );
-                EmbeddingError::Neo4jError(e.into())
+                EmbeddingError::ConnectionError(format!("Failed to get connection: {}", e))
             })?;
-            
-            let duration = start.elapsed();
-            VECTOR_METRICS.record_success(duration);
-            info!(
-                chunk_id = %id,
-                document_id = %chunk.document_id,
-                chunk_index = chunk.chunk_index,
-                duration_ms = duration.as_millis(),
-                "Successfully stored vector chunk"
-            );
-            Ok(id)
-        } else {
-            let duration = start.elapsed();
-            VECTOR_METRICS.record_failure(duration);
-            error!(
-                chunk_id = %chunk.id,
-                document_id = %chunk.document_id,
-                duration_ms = duration.as_millis(),
-                "No ID returned after storing vector chunk"
-            );
-            Err(EmbeddingError::ConnectionError(
-                "No ID returned from storage operation".to_string(),
-            ))
+
+        // Create Cypher query for storing chunk
+        let cypher_query = format!(
+            r#"
+            CREATE (vc:Chunk {{
+                id: '{}',
+                content: '{}',
+                embedding: '{}',
+                chunk_index: {},
+                document_id: '{}',
+                source_id: '{}',
+                created_at: {},
+                updated_at: {},
+                metadata: '{}'
+            }})
+            RETURN vc.id as id
+            "#,
+            chunk.id,
+            escape_cypher_string(&chunk.chunk_text),
+            serde_json::to_string(&chunk.embedding).unwrap_or_else(|_| "[]".to_string()),
+            chunk.chunk_index,
+            chunk.document_id,
+            escape_cypher_string(&chunk.source_id),
+            chunk.created_at.timestamp(),
+            chunk.updated_at.timestamp(),
+            serde_json::to_string(&chunk.metadata).unwrap_or_else(|_| "{}".to_string())
+        );
+
+        let result: redis::RedisResult<Vec<String>> = redis::cmd("GRAPH.QUERY")
+            .arg(&self.config.database)
+            .arg(&cypher_query)
+            .query_async(&mut conn)
+            .await;
+
+        match result {
+            Ok(response) => {
+                let duration = start.elapsed();
+                VECTOR_METRICS.record_success(duration);
+                info!(
+                    chunk_id = %chunk.id,
+                    document_id = %chunk.document_id,
+                    chunk_index = chunk.chunk_index,
+                    duration_ms = duration.as_millis(),
+                    "Successfully stored vector chunk"
+                );
+                Ok(chunk.id.to_string())
+            }
+            Err(e) => {
+                let duration = start.elapsed();
+                VECTOR_METRICS.record_failure(duration);
+                error!(
+                    chunk_id = %chunk.id,
+                    document_id = %chunk.document_id,
+                    chunk_index = chunk.chunk_index,
+                    error = %e,
+                    duration_ms = duration.as_millis(),
+                    "Failed to store vector chunk"
+                );
+                Err(EmbeddingError::ConnectionError(format!("FalcorDB query failed: {}", e)))
+            }
         }
     }
 
@@ -501,17 +438,18 @@ impl FalcorDBClient {
             "Starting batch storage of vector chunks"
         );
 
-        let mut txn = self.graph.start_txn().await.map_err(|e| {
-            let duration = start.elapsed();
-            VECTOR_METRICS.record_failure(duration);
-            error!(
-                chunk_count = chunk_count,
-                error = %e,
-                duration_ms = duration.as_millis(),
-                "Failed to start transaction for batch storage"
-            );
-            EmbeddingError::Neo4jError(e)
-        })?;
+        let mut conn = self.client.get_multiplexed_async_connection().await
+            .map_err(|e| {
+                let duration = start.elapsed();
+                VECTOR_METRICS.record_failure(duration);
+                error!(
+                    chunk_count = chunk_count,
+                    error = %e,
+                    duration_ms = duration.as_millis(),
+                    "Failed to get FalcorDB connection for batch"
+                );
+                EmbeddingError::ConnectionError(format!("Failed to get connection: {}", e))
+            })?;
 
         let mut ids = Vec::with_capacity(chunks.len());
 
@@ -521,105 +459,61 @@ impl FalcorDBClient {
                 chunk_id = %chunk.id,
                 document_id = %chunk.document_id,
                 chunk_index = chunk.chunk_index,
-                "Storing chunk in batch transaction"
+                "Storing chunk in batch"
             );
 
-            let query = Query::new(
+            let cypher_query = format!(
                 r#"
-                CREATE (vc:Vector_Chunk {
-                    id: $id,
-                    embedding: $embedding,
-                    chunk_text: $chunk_text,
-                    chunk_index: $chunk_index,
-                    document_id: $document_id,
-                    source_id: $source_id,
-                    created_at: datetime($created_at),
-                    updated_at: datetime($updated_at),
-                    metadata: $metadata
-                })
+                CREATE (vc:Chunk {{
+                    id: '{}',
+                    content: '{}',
+                    embedding: '{}',
+                    chunk_index: {},
+                    document_id: '{}',
+                    source_id: '{}',
+                    created_at: {},
+                    updated_at: {},
+                    metadata: '{}'
+                }})
                 RETURN vc.id as id
-                "#
-                .to_string(),
-            )
-            .param("id", chunk.id.to_string())
-            .param("embedding", chunk.embedding.clone())
-            .param("chunk_text", chunk.chunk_text.clone())
-            .param("chunk_index", chunk.chunk_index as i64)
-            .param("document_id", chunk.document_id.to_string())
-            .param("source_id", chunk.source_id.clone())
-            .param("created_at", chunk.created_at.to_rfc3339())
-            .param("updated_at", chunk.updated_at.to_rfc3339())
-            .param("metadata", serde_json::to_string(&chunk.metadata)?);
+                "#,
+                chunk.id,
+                escape_cypher_string(&chunk.chunk_text),
+                serde_json::to_string(&chunk.embedding).unwrap_or_else(|_| "[]".to_string()),
+                chunk.chunk_index,
+                chunk.document_id,
+                escape_cypher_string(&chunk.source_id),
+                chunk.created_at.timestamp(),
+                chunk.updated_at.timestamp(),
+                serde_json::to_string(&chunk.metadata).unwrap_or_else(|_| "{}".to_string())
+            );
 
-            let mut result = txn.execute(query).await.map_err(|e| {
-                let duration = start.elapsed();
-                VECTOR_METRICS.record_failure(duration);
-                error!(
-                    chunk_index = idx,
-                    chunk_id = %chunk.id,
-                    document_id = %chunk.document_id,
-                    total_chunks = chunk_count,
-                    error = %e,
-                    duration_ms = duration.as_millis(),
-                    "Failed to store chunk in batch transaction"
-                );
-                EmbeddingError::Neo4jError(e)
-            })?;
+            let result: redis::RedisResult<Vec<String>> = redis::cmd("GRAPH.QUERY")
+                .arg(&self.config.database)
+                .arg(&cypher_query)
+                .query_async(&mut conn)
+                .await;
 
-            if let Some(row) = result.next(&mut txn).await.map_err(|e| {
-                let duration = start.elapsed();
-                VECTOR_METRICS.record_failure(duration);
-                error!(
-                    chunk_index = idx,
-                    chunk_id = %chunk.id,
-                    document_id = %chunk.document_id,
-                    error = %e,
-                    duration_ms = duration.as_millis(),
-                    "Failed to retrieve chunk ID in batch transaction"
-                );
-                EmbeddingError::Neo4jError(e.into())
-            })? {
-                let id: String = row.get("id").map_err(|e| {
+            match result {
+                Ok(_) => {
+                    ids.push(chunk.id.to_string());
+                }
+                Err(e) => {
                     let duration = start.elapsed();
                     VECTOR_METRICS.record_failure(duration);
                     error!(
                         chunk_index = idx,
                         chunk_id = %chunk.id,
                         document_id = %chunk.document_id,
+                        total_chunks = chunk_count,
                         error = %e,
                         duration_ms = duration.as_millis(),
-                        "Failed to extract ID from batch transaction result"
+                        "Failed to store chunk in batch"
                     );
-                    EmbeddingError::Neo4jError(e.into())
-                })?;
-                ids.push(id);
-            } else {
-                let duration = start.elapsed();
-                VECTOR_METRICS.record_failure(duration);
-                error!(
-                    chunk_index = idx,
-                    chunk_id = %chunk.id,
-                    document_id = %chunk.document_id,
-                    duration_ms = duration.as_millis(),
-                    "No ID returned for chunk in batch transaction"
-                );
-                return Err(EmbeddingError::ConnectionError(
-                    "No ID returned from batch storage operation".to_string(),
-                ));
+                    return Err(EmbeddingError::ConnectionError(format!("Batch storage failed: {}", e)));
+                }
             }
         }
-
-        txn.commit().await.map_err(|e| {
-            let duration = start.elapsed();
-            VECTOR_METRICS.record_failure(duration);
-            error!(
-                chunk_count = chunk_count,
-                error = %e,
-                duration_ms = duration.as_millis(),
-                "Failed to commit batch transaction"
-            );
-            EmbeddingError::Neo4jError(e)
-        })?;
 
         let duration = start.elapsed();
         VECTOR_METRICS.record_success(duration);
@@ -634,99 +528,17 @@ impl FalcorDBClient {
 
     /// Convenience wrapper for storing a vector chunk with comprehensive logging
     /// 
-    /// This method wraps `store_vector_chunk` and provides the same functionality
+    /// This method wraps `store_vector_chunk` and provides a same functionality
     /// with explicit emphasis on observability. It's useful when you want to make
     /// it clear that logging and metrics are being captured.
     pub async fn store_vector_with_logging(&self, chunk: &VectorChunk) -> Result<String> {
         self.store_vector_chunk(chunk).await
     }
+}
 
-    /// Create HAS_CHUNK relationship from Document to Vector_Chunk
-    pub async fn create_has_chunk_relationship(
-        &self,
-        document_id: Uuid,
-        chunk_id: Uuid,
-        chunk_index: usize,
-    ) -> Result<()> {
-        debug!(
-            "Creating HAS_CHUNK relationship: document={}, chunk={}, index={}",
-            document_id, chunk_id, chunk_index
-        );
-
-        let query = Query::new(
-            r#"
-            MATCH (d:Document {id: $document_id})
-            MATCH (vc:Vector_Chunk {id: $chunk_id})
-            CREATE (d)-[r:HAS_CHUNK {
-                chunk_index: $chunk_index,
-                created_at: datetime()
-            }]->(vc)
-            RETURN r
-            "#
-            .to_string(),
-        )
-        .param("document_id", document_id.to_string())
-        .param("chunk_id", chunk_id.to_string())
-        .param("chunk_index", chunk_index as i64);
-
-        self.graph.run(query).await.map_err(|e| {
-            error!(
-                "Failed to create HAS_CHUNK relationship: document={}, chunk={}, error={}",
-                document_id, chunk_id, e
-            );
-            EmbeddingError::Neo4jError(e)
-        })?;
-
-        info!(
-            "Created HAS_CHUNK relationship: document={}, chunk={}",
-            document_id, chunk_id
-        );
-
-        Ok(())
-    }
-
-    /// Create NEXT_CHUNK relationship between sequential Vector_Chunk nodes
-    pub async fn create_next_chunk_relationship(
-        &self,
-        from_chunk_id: Uuid,
-        to_chunk_id: Uuid,
-        sequence_number: usize,
-    ) -> Result<()> {
-        debug!(
-            "Creating NEXT_CHUNK relationship: from={}, to={}, sequence={}",
-            from_chunk_id, to_chunk_id, sequence_number
-        );
-
-        let query = Query::new(
-            r#"
-            MATCH (vc1:Vector_Chunk {id: $from_chunk_id})
-            MATCH (vc2:Vector_Chunk {id: $to_chunk_id})
-            CREATE (vc1)-[r:NEXT_CHUNK {
-                sequence_number: $sequence_number
-            }]->(vc2)
-            RETURN r
-            "#
-            .to_string(),
-        )
-        .param("from_chunk_id", from_chunk_id.to_string())
-        .param("to_chunk_id", to_chunk_id.to_string())
-        .param("sequence_number", sequence_number as i64);
-
-        self.graph.run(query).await.map_err(|e| {
-            error!(
-                "Failed to create NEXT_CHUNK relationship: from={}, to={}, error={}",
-                from_chunk_id, to_chunk_id, e
-            );
-            EmbeddingError::Neo4jError(e)
-        })?;
-
-        info!(
-            "Created NEXT_CHUNK relationship: from={}, to={}",
-            from_chunk_id, to_chunk_id
-        );
-
-        Ok(())
-    }
+/// Escape single quotes in Cypher strings
+fn escape_cypher_string(s: &str) -> String {
+    s.replace('\'', "\\'")
 }
 
 #[cfg(test)]
@@ -751,29 +563,6 @@ mod tests {
         let result = FalcorDBConfig::from_env();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("FALCORDB_PASSWORD"));
-    }
-
-    #[tokio::test]
-    async fn test_health_check_requires_connection() {
-        // This test documents that health_check requires a valid connection
-        // In a real test environment, you would set up a test FalcorDB instance
-        
-        // Skip if no test database available
-        if std::env::var("FALCORDB_TEST_ENABLED").is_err() {
-            return;
-        }
-
-        let config = FalcorDBConfig {
-            password: std::env::var("FALCORDB_PASSWORD").unwrap_or_default(),
-            ..Default::default()
-        };
-
-        let client = FalcorDBClient::new(config).await;
-        
-        if let Ok(client) = client {
-            let health = client.health_check().await;
-            assert!(health.is_ok());
-        }
     }
 
     #[test]
@@ -884,5 +673,12 @@ mod tests {
         
         assert_eq!(metrics.storage_success.get(), 2.0);
         assert_eq!(metrics.storage_failure.get(), 1.0);
+    }
+
+    #[test]
+    fn test_escape_cypher_string() {
+        assert_eq!(escape_cypher_string("test"), "test");
+        assert_eq!(escape_cypher_string("test's quote"), "test\\'s quote");
+        assert_eq!(escape_cypher_string("multiple '' quotes"), "multiple \\'\\' quotes");
     }
 }

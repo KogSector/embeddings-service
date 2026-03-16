@@ -15,7 +15,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use embeddings_service::{
     api::{health_check, generate_embeddings, generate_batch_embeddings,
-          generate_graphiti_embeddings, process_chunks, list_graphiti_models, graphiti_health},
+          generate_graphiti_embeddings, process_chunks, list_graphiti_models, graphiti_health,
+          store_embeddings_falcordb, get_falcordb_stats, test_falcordb_connection},
     core::Config,
     EmbeddingsService,
 };
@@ -54,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let rate_limit = confuse_common::middleware::AxumRateLimitConfig::default_for_service(20);
 
-    // Build router — generate-only endpoints
+    // Build router — generate-only endpoints with FalcorDB storage
     let app = Router::new()
         // Health
         .route("/health", get(health_check))
@@ -66,6 +67,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/graphiti/generate", post(generate_graphiti_embeddings))
         .route("/api/v1/graphiti/chunks", post(process_chunks))
         .route("/api/v1/graphiti/models", get(list_graphiti_models))
+        // FalcorDB endpoints
+        .route("/api/v1/falcordb/store", post(store_embeddings_falcordb))
+        .route("/api/v1/falcordb/stats", get(get_falcordb_stats))
+        .route("/api/v1/falcordb/test", get(test_falcordb_connection))
         .with_state(app_state)
         .layer(axum::middleware::from_fn(confuse_common::middleware::security_headers_middleware))
         .layer(axum::middleware::from_fn(confuse_common::middleware::zero_trust_middleware))

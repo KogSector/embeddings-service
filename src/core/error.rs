@@ -22,20 +22,17 @@ pub enum EmbeddingError {
     #[error("Redis error: {0}")]
     RedisError(#[from] redis::RedisError),
     
-    #[error("Neo4j error: {0}")]
-    Neo4jError(#[from] neo4rs::Error),
-    
     #[error("Connection error: {0}")]
     ConnectionError(String),
+    
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
     
     #[error("Python error: {0}")]
     PythonError(String),
     
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
-    
-    #[error("Configuration error: {0}")]
-    ConfigError(String),
     
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
