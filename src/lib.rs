@@ -58,7 +58,7 @@ impl EmbeddingsService {
         }
     }
 
-    async fn _falcordb_client() -> Option<Arc<FalcorDBClient>> {
+    pub async fn _falcordb_client() -> Option<Arc<FalcorDBClient>> {
         use crate::storage::falcordb_client::FalcorDBConfig;
         
         match FalcorDBConfig::from_env() {
@@ -254,5 +254,33 @@ impl EmbeddingsService {
         }
 
         Ok(serde_json::Value::Object(metadata))
+    }
+
+    /// Generate embeddings for a single chunk (internal method for Kafka processing)
+    pub async fn generate_embeddings_internal(
+        &self,
+        content: &str,
+        chunk_id: Option<&str>,
+        source_id: &str,
+    ) -> Result<Vec<f32>> {
+        let model = &self.config.models.default_model;
+        let embedding_model = self.model_manager.ensure_model_loaded(model).await?;
+        
+        let embedding = embedding_model
+            .generate(vec![content.to_string()])
+            .await
+            .map_err(|e| crate::core::EmbeddingError::GenerationError(format!("Failed to generate embedding: {}", e)))?;
+        
+        let embedding = embedding.into_iter().next()
+            .ok_or_else(|| crate::core::EmbeddingError::GenerationError("No embedding generated".to_string()))?;
+        
+        tracing::debug!(
+            "Generated embedding for chunk {} from source {}: {} dimensions",
+            chunk_id.unwrap_or("unknown"),
+            source_id,
+            embedding.len()
+        );
+        
+        Ok(embedding)
     }
 }

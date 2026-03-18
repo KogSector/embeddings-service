@@ -174,7 +174,7 @@ impl Default for FalcorDBConfig {
     fn default() -> Self {
         Self {
             host: "localhost".to_string(),
-            port: 6379,
+            port: 8765,
             username: "falkor".to_string(),
             password: String::new(),
             database: "falkordb".to_string(),
@@ -195,7 +195,7 @@ impl FalcorDBConfig {
             host: std::env::var("FALCORDB_HOST")
                 .unwrap_or_else(|_| "localhost".to_string()),
             port: std::env::var("FALCORDB_PORT")
-                .unwrap_or_else(|_| "6379".to_string())
+                .unwrap_or_else(|_| "8765".to_string())
                 .parse()
                 .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALCORDB_PORT: {}", e)))?,
             username: std::env::var("FALCORDB_USERNAME")
@@ -240,7 +240,7 @@ pub struct FalcorDBClient {
 }
 
 impl FalcorDBClient {
-    /// Create a new FalcorDB client with connection pooling
+    /// Create a new FalcorDB client with connection pooling and retry logic
     pub async fn new(config: FalcorDBConfig) -> Result<Self> {
         info!(
             "Initializing FalcorDB client: {}:{} (pool_size: {})",
@@ -256,21 +256,46 @@ impl FalcorDBClient {
         let client = Client::open(connection_string.as_str())
             .map_err(|e| EmbeddingError::ConfigError(format!("Failed to create FalcorDB client: {}", e)))?;
 
-        // Test connection
-        let mut conn = client.get_multiplexed_async_connection().await
-            .map_err(|e| EmbeddingError::ConfigError(format!("Failed to get FalcorDB connection: {}", e)))?;
+        // Test connection with retry logic (up to 3 attempts)
+        let max_retries = 3;
+        let mut last_error = None;
+        
+        for attempt in 1..=max_retries {
+            match client.get_multiplexed_async_connection().await {
+                Ok(mut conn) => {
+                    match redis::cmd("PING").query_async::<String>(&mut conn).await {
+                        Ok(_) => {
+                            info!("FalcorDB client initialized successfully on attempt {}", attempt);
+                            return Ok(Self {
+                                client: Arc::new(client),
+                                config,
+                            });
+                        }
+                        Err(e) => {
+                            warn!("FalcorDB ping failed on attempt {}/{}: {}", attempt, max_retries, e);
+                            last_error = Some(e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to get FalcorDB connection on attempt {}/{}: {}", attempt, max_retries, e);
+                    last_error = Some(e);
+                }
+            }
+            
+            if attempt < max_retries {
+                let backoff_ms = attempt * 1000; // Linear backoff: 1s, 2s, 3s
+                info!("Retrying FalcorDB connection in {}ms...", backoff_ms);
+                tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms as u64)).await;
+            }
+        }
 
-        let _: String = redis::cmd("PING")
-            .query_async(&mut conn)
-            .await
-            .map_err(|e| EmbeddingError::ConfigError(format!("FalcorDB ping failed: {}", e)))?;
-
-        info!("FalcorDB client initialized successfully");
-
-        Ok(Self {
-            client: Arc::new(client),
-            config,
-        })
+        error!("Failed to initialize FalcorDB client after {} attempts", max_retries);
+        Err(EmbeddingError::ConfigError(format!(
+            "FalcorDB connection failed after {} retries: {}",
+            max_retries,
+            last_error.map(|e| e.to_string()).unwrap_or_else(|| "Unknown error".to_string())
+        )))
     }
 
     /// Health check to verify FalcorDB connectivity
@@ -549,7 +574,7 @@ mod tests {
     fn test_config_default() {
         let config = FalcorDBConfig::default();
         assert_eq!(config.host, "localhost");
-        assert_eq!(config.port, 6379);
+        assert_eq!(config.port, 8765);
         assert_eq!(config.vector_dimension, 384);
         assert_eq!(config.similarity_threshold, 0.75);
         assert_eq!(config.connection_pool_size, 10);
