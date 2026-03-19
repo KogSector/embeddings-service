@@ -9,6 +9,7 @@ pub mod generators;
 pub mod storage;
 pub mod models;
 pub mod events;
+pub mod grpc_server;
 
 // Include generated protobuf code
 pub mod proto {

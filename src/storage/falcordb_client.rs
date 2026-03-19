@@ -192,42 +192,42 @@ impl FalcorDBConfig {
     /// Load configuration from environment variables
     pub fn from_env() -> Result<Self> {
         Ok(Self {
-            host: std::env::var("FALCORDB_HOST")
+            host: std::env::var("FALKORDB_HOST")
                 .unwrap_or_else(|_| "localhost".to_string()),
-            port: std::env::var("FALCORDB_PORT")
+            port: std::env::var("FALKORDB_PORT")
                 .unwrap_or_else(|_| "8765".to_string())
                 .parse()
-                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALCORDB_PORT: {}", e)))?,
-            username: std::env::var("FALCORDB_USERNAME")
+                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALKORDB_PORT: {}", e)))?,
+            username: std::env::var("FALKORDB_USERNAME")
                 .unwrap_or_else(|_| "falkor".to_string()),
-            password: std::env::var("FALCORDB_PASSWORD")
-                .map_err(|_| EmbeddingError::ConfigError("FALCORDB_PASSWORD not set".to_string()))?,
-            database: std::env::var("FALCORDB_DATABASE")
+            password: std::env::var("FALKORDB_PASSWORD")
+                .map_err(|_| EmbeddingError::ConfigError("FALKORDB_PASSWORD not set".to_string()))?,
+            database: std::env::var("FALKORDB_DATABASE")
                 .unwrap_or_else(|_| "falkordb".to_string()),
-            vector_dimension: std::env::var("FALCORDB_VECTOR_DIMENSION")
+            vector_dimension: std::env::var("FALKORDB_VECTOR_DIMENSION")
                 .unwrap_or_else(|_| "384".to_string())
                 .parse()
-                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALCORDB_VECTOR_DIMENSION: {}", e)))?,
-            similarity_threshold: std::env::var("FALCORDB_SIMILARITY_THRESHOLD")
+                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALKORDB_VECTOR_DIMENSION: {}", e)))?,
+            similarity_threshold: std::env::var("FALKORDB_SIMILARITY_THRESHOLD")
                 .unwrap_or_else(|_| "0.75".to_string())
                 .parse()
-                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALCORDB_SIMILARITY_THRESHOLD: {}", e)))?,
-            max_results: std::env::var("FALCORDB_MAX_RESULTS")
+                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALKORDB_SIMILARITY_THRESHOLD: {}", e)))?,
+            max_results: std::env::var("FALKORDB_MAX_RESULTS")
                 .unwrap_or_else(|_| "100".to_string())
                 .parse()
-                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALCORDB_MAX_RESULTS: {}", e)))?,
-            connection_pool_size: std::env::var("FALCORDB_CONNECTION_POOL_SIZE")
+                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALKORDB_MAX_RESULTS: {}", e)))?,
+            connection_pool_size: std::env::var("FALKORDB_CONNECTION_POOL_SIZE")
                 .unwrap_or_else(|_| "10".to_string())
                 .parse()
-                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALCORDB_CONNECTION_POOL_SIZE: {}", e)))?,
-            connection_timeout_ms: std::env::var("FALCORDB_CONNECTION_TIMEOUT_MS")
+                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALKORDB_CONNECTION_POOL_SIZE: {}", e)))?,
+            connection_timeout_ms: std::env::var("FALKORDB_CONNECTION_TIMEOUT_MS")
                 .unwrap_or_else(|_| "5000".to_string())
                 .parse()
-                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALCORDB_CONNECTION_TIMEOUT_MS: {}", e)))?,
-            query_timeout_ms: std::env::var("FALCORDB_QUERY_TIMEOUT_MS")
+                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALKORDB_CONNECTION_TIMEOUT_MS: {}", e)))?,
+            query_timeout_ms: std::env::var("FALKORDB_QUERY_TIMEOUT_MS")
                 .unwrap_or_else(|_| "30000".to_string())
                 .parse()
-                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALCORDB_QUERY_TIMEOUT_MS: {}", e)))?,
+                .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALKORDB_QUERY_TIMEOUT_MS: {}", e)))?,
         })
     }
 }
@@ -583,11 +583,11 @@ mod tests {
     #[test]
     fn test_config_from_env_missing_password() {
         // Clear password env var if set
-        std::env::remove_var("FALCORDB_PASSWORD");
+        std::env::remove_var("FALKORDB_PASSWORD");
         
         let result = FalcorDBConfig::from_env();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("FALCORDB_PASSWORD"));
+        assert!(result.unwrap_err().to_string().contains("FALKORDB_PASSWORD"));
     }
 
     #[test]

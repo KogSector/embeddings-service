@@ -22,7 +22,7 @@ use embeddings_service::{
     events::EmbeddingEventPublisher,
     EmbeddingsService,
 };
-use confuse_common::events::{EventProducer, Topics, ChunkRawEvent, ChunkEnrichedEvent, EmbeddingGeneratedEvent};
+// Kafka types only used in the commented-out consumer block below
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -80,10 +80,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/graphiti/chunks", post(process_chunks))
         .route("/api/v1/graphiti/models", get(list_graphiti_models))
         // FalcorDB endpoints (commented out for now)
-        // .route("/api/v1/falcordb/store", post(store_embeddings_falcordb))
+        // .route("/api/v1/falcordb/store", post(store_embeddings_falcordb))\
         // .route("/api/v1/falcordb/stats", get(get_falcordb_stats))
         // .route("/api/v1/falcordb/test", get(test_falcordb_connection))
-        .with_state(app_state)
+        .with_state(app_state.clone())
         .layer(axum::middleware::from_fn(confuse_common::middleware::security_headers_middleware))
         .layer(axum::middleware::from_fn(confuse_common::middleware::zero_trust_middleware))
         .layer(axum::middleware::from_fn_with_state(rate_limit.clone(), confuse_common::middleware::axum_rate_limit_middleware))
@@ -93,6 +93,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .layer(TraceLayer::new_for_http())
                 .layer(CorsLayer::permissive())
         );
+
+    // Start gRPC server in background (for unified-processor to call BatchEmbed/ProcessAndStoreChunks)
+    let grpc_state = app_state.clone();
+    let grpc_default_model = config.models.default_model.clone();
+    let grpc_host = config.server.grpc_host.clone();
+    let grpc_port = config.server.grpc_port;
+    tokio::spawn(async move {
+        if let Err(e) = embeddings_service::grpc_server::start_grpc_server(
+            grpc_state,
+            grpc_default_model,
+            grpc_host,
+            grpc_port,
+        ).await {
+            tracing::error!("Embeddings gRPC server failed: {}", e);
+        }
+    });
 
     // Start HTTP server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
