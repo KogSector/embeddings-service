@@ -1,5 +1,5 @@
 //! Main entry point for the embeddings service
-//! Kafka-streamed pipeline: consumes chunks.raw → generates embeddings → produces chunks.embedded
+//! gRPC pipeline: unified-processor calls ProcessAndStoreChunks → generates embeddings → stores in FalkorDB
 
 use axum::{
     routing::{get, post},
@@ -22,7 +22,7 @@ use embeddings_service::{
     events::EmbeddingEventPublisher,
     EmbeddingsService,
 };
-// Kafka types only used in the commented-out consumer block below
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -120,88 +120,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Start Kafka consumer to process chunks.raw events (commented out - EventConsumer not available)
-/*
-async fn start_kafka_consumer(service: EmbeddingsService) -> anyhow::Result<()> {
-    let bootstrap_servers = std::env::var("KAFKA_BOOTSTRAP_SERVERS")
-        .unwrap_or_else(|_| "localhost:9092".to_string());
-    let group_id = std::env::var("KAFKA_GROUP_ID")
-        .unwrap_or_else(|_| "embeddings-service".to_string());
-    
-    let consumer = confuse_common::events::EventConsumer::new(&bootstrap_servers, &group_id)?;
-    
-    tracing::info!("Starting Kafka consumer for chunks.raw");
-    
-    consumer.subscribe(&[Topics::CHUNKS_RAW]).await?;
-    
-    let mut stream = consumer.stream();
-    
-    while let Some(result) = stream.next().await {
-        match result {
-            Ok(msg) => {
-                if let Some(payload) = msg.payload() {
-                    match serde_json::from_slice::<ChunkRawEvent>(payload) {
-                        Ok(chunk_event) => {
-                            // Process chunk and generate embeddings
-                            if let Err(e) = process_chunk_with_embeddings(&service, &chunk_event).await {
-                                tracing::error!("Failed to process chunk {}: {}", chunk_event.chunk_id, e);
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to deserialize chunk event: {}", e);
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::error!("Kafka consumer error: {}", e);
-            }
-        }
-    }
-    
-    tracing::info!("Kafka consumer stopped");
-    Ok(())
-}
-
-/// Process a single chunk and generate embeddings
-async fn process_chunk_with_embeddings(
-    service: &EmbeddingsService, 
-    chunk_event: &ChunkRawEvent
-) -> anyhow::Result<()> {
-    // Generate embeddings for the chunk content
-    let embedding_result = service.generate_embeddings_internal(
-        &chunk_event.content,
-        Some(&chunk_event.chunk_id),
-        &chunk_event.source_id,
-    ).await?;
-    
-    // Publish chunks.embedded event back to unified-processor
-    let bootstrap_servers = std::env::var("KAFKA_BOOTSTRAP_SERVERS")
-        .unwrap_or_else(|_| "localhost:9092".to_string());
-    
-    let producer = confuse_common::events::EventProducer::new(&bootstrap_servers)?;
-    
-    let enriched_event = ChunkEnrichedEvent {
-        headers: confuse_common::events::EventHeaders::new(
-            "embeddings-service",
-            "chunk.enriched"
-        )
-        .with_correlation_id(&chunk_event.chunk_id),
-        metadata: confuse_common::events::EventMetadata::default(),
-        source_id: chunk_event.source_id.clone(),
-        file_id: chunk_event.file_id.clone(),
-        chunk_id: chunk_event.chunk_id.clone(),
-        content: chunk_event.content.clone(),
-        chunk_type: chunk_event.chunk_type.clone(),
-        entity_hints: chunk_event.entity_hints.clone(),
-        relationship_context: chunk_event.relationship_context.clone(),
-        embedding: Some(embedding_result.clone()),
-        quality_score: Some(1.0), // Default quality score
-    };
-    
-    producer.publish(Topics::EMBEDDING_GENERATED, &enriched_event).await?;
-    
-    tracing::info!("Processed chunk {} and published embeddings", chunk_event.chunk_id);
-    Ok(())
-}
-*/
