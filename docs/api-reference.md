@@ -96,10 +96,12 @@ message ProcessChunksResponse {
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `8060` | HTTP server port |
-| `GRPC_PORT` | `50054` | gRPC server port |
+| `EMBEDDINGS_SERVICE_PORT` | `3001` | HTTP server port |
+| `EMBEDDINGS_GRPC_PORT` | `50054` | gRPC server port |
 | `FALKORDB_HOST` | `localhost` | FalkorDB host |
 | `FALKORDB_PORT` | `6379` | FalkorDB port |
+| `FALKORDB_DATABASE` | `0` | FalkorDB database index |
 | `FALKORDB_GRAPH_NAME` | `confuse_knowledge` | FalkorDB graph name |
-| `DEFAULT_MODEL` | `all-MiniLM-L6-v2` | Default embedding model |
+| `DEFAULT_EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Default embedding model |
 | `AUTH_MIDDLEWARE_URL` | `http://localhost:3010` | Auth middleware URL |
+
