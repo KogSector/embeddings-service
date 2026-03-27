@@ -7,7 +7,7 @@ license = "Proprietary"
 authors = ["ConFuse Team"]
 
 [features]
-default = []
+default = ["kafka"]
 kafka = ["confuse-common/kafka"]
 
 [lib]

@@ -200,8 +200,7 @@ impl FalcorDBConfig {
                 .map_err(|e| EmbeddingError::ConfigError(format!("Invalid FALKORDB_PORT: {}", e)))?,
             username: std::env::var("FALKORDB_USERNAME")
                 .unwrap_or_else(|_| "falkor".to_string()),
-            password: std::env::var("FALKORDB_PASSWORD")
-                .map_err(|_| EmbeddingError::ConfigError("FALKORDB_PASSWORD not set".to_string()))?,
+            password: std::env::var("FALKORDB_PASSWORD").unwrap_or_else(|_| "".to_string()),
             database: std::env::var("FALKORDB_DATABASE")
                 .unwrap_or_else(|_| "falkordb".to_string()),
             vector_dimension: std::env::var("FALKORDB_VECTOR_DIMENSION")
