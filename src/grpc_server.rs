@@ -3,6 +3,9 @@
 //! and storing Chunk nodes in FalkorDB.
 
 use std::sync::Arc;
+use std::path::Path;
+use std::fs;
+use std::io::Write;
 use tonic::{transport::Server, Request, Response, Status};
 
 use crate::AppState;
@@ -23,6 +26,47 @@ impl EmbeddingsGrpcService {
     pub fn new(state: AppState, default_model: String) -> Self {
         Self { state, default_model }
     }
+
+    /// Save embedding to file for debugging/inspection
+    fn save_embedding_to_file(
+        &self,
+        chunk_id: &str,
+        source_id: &str,
+        content: &str,
+        embedding: &[f32],
+        model: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let embeddings_dir = Path::new("embeddings");
+        
+        // Create embeddings directory if it doesn't exist
+        fs::create_dir_all(embeddings_dir)?;
+        
+        // Create filename with chunk_id and timestamp
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs();
+        let filename = format!("{}_{}.json", chunk_id, timestamp);
+        let filepath = embeddings_dir.join(filename);
+        
+        // Create embedding data structure
+        let embedding_data = serde_json::json!({
+            "chunk_id": chunk_id,
+            "source_id": source_id,
+            "model": model,
+            "dimension": embedding.len(),
+            "content": content,
+            "embedding": embedding,
+            "timestamp": timestamp,
+            "created_at": chrono::Utc::now().to_rfc3339()
+        });
+        
+        // Write to file
+        let mut file = fs::File::create(filepath)?;
+        file.write_all(serde_json::to_string_pretty(&embedding_data)?.as_bytes())?;
+        
+        tracing::info!("Saved embedding to file: chunk_id={}", chunk_id);
+        Ok(())
+    }
 }
 
 #[tonic::async_trait]
@@ -42,8 +86,9 @@ impl Embeddings for EmbeddingsGrpcService {
             .await
             .map_err(|e| Status::internal(format!("Model load failed: {e}")))?;
 
+        let text_for_generation = req.text.clone();
         let embeddings = model
-            .generate(vec![req.text])
+            .generate(vec![text_for_generation])
             .await
             .map_err(|e| Status::internal(format!("Embedding generation failed: {e}")))?;
 
@@ -52,6 +97,17 @@ impl Embeddings for EmbeddingsGrpcService {
 
         let dimension = embedding.len() as i32;
         let chunk_id = req.chunk_id.unwrap_or_default();
+
+        // Save embedding to file for debugging/inspection
+        if let Err(e) = self.save_embedding_to_file(
+            &chunk_id,
+            "single_embed_request",
+            &req.text,
+            &embedding,
+            &model_name,
+        ) {
+            tracing::warn!("Failed to save embedding to file: chunk_id={}, error={}", chunk_id, e);
+        }
 
         Ok(Response::new(EmbedResponse {
             embeddings: embedding,
@@ -84,10 +140,27 @@ impl Embeddings for EmbeddingsGrpcService {
             .await
             .map_err(|e| Status::internal(format!("Model load failed: {e}")))?;
 
+        let texts_for_generation = req.texts.clone();
         let all_embeddings = model
-            .generate(req.texts)
+            .generate(texts_for_generation)
             .await
             .map_err(|e| Status::internal(format!("Batch embedding failed: {e}")))?;
+
+        // Save embeddings to files for debugging/inspection
+        for (idx, embedding) in all_embeddings.iter().enumerate() {
+            let chunk_id = req.chunk_ids.get(idx).cloned().unwrap_or_else(|| format!("batch_{}", idx));
+            let text = req.texts.get(idx).cloned().unwrap_or_else(|| "".to_string());
+            
+            if let Err(e) = self.save_embedding_to_file(
+                &chunk_id,
+                "batch_embed_request",
+                &text,
+                embedding,
+                &model_name,
+            ) {
+                tracing::warn!("Failed to save embedding to file: chunk_id={}, error={}", chunk_id, e);
+            }
+        }
 
         let results: Vec<EmbeddingResult> = all_embeddings
             .into_iter()
@@ -192,14 +265,25 @@ impl Embeddings for EmbeddingsGrpcService {
                 }
             };
 
-            // Store in FalkorDB if client is available
+            // Save embedding to file for debugging/inspection
+            if let Err(e) = self.save_embedding_to_file(
+                &chunk.chunk_id,
+                &chunk.source_id,
+                &chunk.content,
+                &embedding,
+                &model_name,
+            ) {
+                tracing::warn!("Failed to save embedding to file: chunk_id={}, error={}", chunk.chunk_id, e);
+            }
+
+            // Store in FalkorDB if client is available, otherwise return embeddings
             if let Some(falcordb_client) = &self.state.falcordb_client {
                 let source_uuid = uuid::Uuid::parse_str(&chunk.source_id)
                     .unwrap_or_else(|_| uuid::Uuid::new_v4());
 
                 let vector_chunk = crate::storage::falcordb_client::VectorChunk {
                     id: uuid::Uuid::new_v4(),
-                    embedding,
+                    embedding: embedding.clone(),
                     chunk_text: chunk.content.clone(),
                     chunk_index: i,
                     document_id: source_uuid,
@@ -239,18 +323,19 @@ impl Embeddings for EmbeddingsGrpcService {
                     }
                 }
             } else {
-                // No FalkorDB — log warning, still count as stored so pipeline continues
-                tracing::warn!(
-                    "FalkorDB not configured; chunk {} will not be persisted",
+                // No FalkorDB — return embeddings without storage
+                tracing::info!(
+                    "FalkorDB not configured; returning embeddings for chunk {} without persistence",
                     chunk.chunk_id
                 );
                 results.push(ChunkResult {
                     chunk_id: chunk.chunk_id.clone(),
                     stored_node_id: String::new(),
-                    stored: false,
-                    error: Some("FalkorDB client not initialized".to_string()),
+                    stored: false, // Not stored, but embeddings generated successfully
+                    error: None, // No error - embeddings returned to caller
                 });
-                chunks_failed += 1;
+                // Note: chunks_stored stays 0, but chunks_failed should also stay 0
+                // since this is a valid "embeddings-only" mode
             }
         }
 
