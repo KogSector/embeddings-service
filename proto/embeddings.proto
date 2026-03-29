@@ -11,9 +11,6 @@ service Embeddings {
   // Batch embedding generation
   rpc BatchEmbed(BatchEmbedRequest) returns (BatchEmbedResponse);
   
-  // Process chunks and store in FalkorDB as Chunk nodes
-  rpc ProcessAndStoreChunks(ProcessChunksRequest) returns (ProcessChunksResponse);
-  
   // Model information
   rpc GetModelInfo(ModelInfoRequest) returns (ModelInfo);
 }
@@ -62,70 +59,4 @@ message ModelInfo {
   string provider = 4;
 }
 
-// Chunk processing request from unified-processor
-message ProcessChunksRequest {
-  repeated ChunkData chunks = 1;
-  optional string model = 2;
-  map<string, string> options = 3;
-}
 
-message ChunkData {
-  string chunk_id = 1;
-  string source_id = 2;
-  string file_path = 3;
-  string content = 4;
-  string chunk_type = 5;
-  string level = 6;
-  string tier = 7;
-  float confidence = 8;
-  optional QualityScore quality = 9;
-  ChunkMetadata metadata = 10;
-  int64 created_at = 13;  // Unix timestamp
-  optional int64 enhanced_at = 14;
-}
-
-message QualityScore {
-  float overall = 1;
-  float boundary_clarity = 2;
-  float contextual_completeness = 3;
-  float semantic_coherence = 4;
-  string scored_by = 5;
-  int64 scored_at = 6;
-}
-
-message ChunkMetadata {
-  repeated uint32 line_range = 1;  // [start, end]
-  repeated uint32 byte_range = 2; // [start, end]
-  uint32 complexity_score = 3;
-  uint32 token_count = 4;
-  optional string parent_id = 5;
-  repeated string child_ids = 6;
-  repeated string related_ids = 7;
-  repeated EntityHint entity_hints = 8;
-  repeated string relationship_context = 9;
-  map<string, string> custom = 10;
-}
-
-message EntityHint {
-  string text = 1;
-  string entity_type = 2;
-  float confidence = 3;
-  uint32 start_offset = 4;
-  uint32 end_offset = 5;
-}
-
-message ProcessChunksResponse {
-  repeated ChunkResult results = 1;
-  string model_used = 2;
-  int32 total_chunks = 3;
-  int32 chunks_stored = 4;
-  int32 chunks_failed = 5;
-  repeated string errors = 6;
-}
-
-message ChunkResult {
-  string chunk_id = 1;
-  string stored_node_id = 2;
-  bool stored = 3;
-  optional string error = 4;
-}

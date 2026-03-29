@@ -19,7 +19,6 @@ use embeddings_service::{
           generate_graphiti_embeddings, process_chunks, list_graphiti_models, graphiti_health},
     core::Config,
     models::ModelManager,
-    events::EmbeddingEventPublisher,
     EmbeddingsService,
 };
 
@@ -42,19 +41,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize service components
     let model_manager = Arc::new(ModelManager::new(config.clone()));
-    let falcordb_client = EmbeddingsService::_falcordb_client().await;
-    let event_publisher = EmbeddingEventPublisher::new();
     
-    // Initialize service
-    let service = EmbeddingsService::new(
-        config.clone(),
-        model_manager,
-        falcordb_client,
-        event_publisher,
-    );
-    service.initialize_default_model().await?;
 
-    let app_state = service.app_state();
+    // Ensure default model is loaded at startup
+    model_manager.ensure_model_loaded(&config.models.default_model)
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+    let app_state = embeddings_service::AppState {
+        model_manager: model_manager.clone(),
+    };
 
     // -- Shared Middleware (from confuse-common) --
     let auth_service_url = std::env::var("AUTH_MIDDLEWARE_URL")

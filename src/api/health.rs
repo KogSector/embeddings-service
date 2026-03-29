@@ -15,20 +15,12 @@ pub struct HealthResponse {
     pub service: String,
     pub version: String,
     pub timestamp: String,
-    pub falcordb_connected: bool,
     pub model_loaded: bool,
 }
 
 pub async fn health_check(
     State(app_state): State<AppState>,
 ) -> Result<Json<HealthResponse>, StatusCode> {
-    // Check FalcorDB connectivity
-    let falcordb_connected = if let Some(falcordb_client) = &app_state.falcordb_client {
-        falcordb_client.health_check().await.is_ok()
-    } else {
-        false
-    };
-    
     // Check if default model is loaded
     let model_loaded = app_state.model_manager
         .get_model("sentence-transformers/all-MiniLM-L6-v2")
@@ -47,7 +39,6 @@ pub async fn health_check(
         service: "embeddings-service".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
-        falcordb_connected,
         model_loaded,
     };
 

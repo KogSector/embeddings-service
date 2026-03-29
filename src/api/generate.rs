@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::generators::BatchGenerator;
-use crate::storage::falcordb_client::VectorChunk;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -104,54 +103,8 @@ pub async fn generate_embeddings(
             )
         })?;
     
-    // Store in FalcorDB if client is available and metadata is provided
-    let (embedding_id, stored) = if let Some(falcordb_client) = &app_state.falcordb_client {
-        if let (Some(doc_id_str), Some(src_id)) = (&request.document_id, &request.source_id) {
-            // Parse document_id
-            let document_id = Uuid::parse_str(doc_id_str)
-                .map_err(|e| {
-                    (
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse {
-                            error: "invalid_document_id".to_string(),
-                            message: "Invalid document_id format".to_string(),
-                            details: Some(e.to_string()),
-                        })
-                    )
-                })?;
-            
-            let chunk = VectorChunk {
-                id: Uuid::new_v4(),
-                embedding: embedding.clone(),
-                chunk_text: request.text,
-                chunk_index: request.chunk_index.unwrap_or(0),
-                document_id,
-                source_id: src_id.clone(),
-                created_at: chrono::Utc::now(),
-                updated_at: chrono::Utc::now(),
-                metadata: request.metadata.unwrap_or_else(|| serde_json::json!({})),
-            };
-            
-            match falcordb_client.store_vector_chunk(&chunk).await {
-                Ok(id) => (Some(id), Some(true)),
-                Err(e) => {
-                    tracing::error!("Failed to store vector in FalcorDB: {}", e);
-                    return Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ErrorResponse {
-                            error: "storage_failed".to_string(),
-                            message: "Failed to store vector in FalcorDB".to_string(),
-                            details: Some(e.to_string()),
-                        })
-                    ));
-                }
-            }
-        } else {
-            (None, Some(false))
-        }
-    } else {
-        (None, None)
-    };
+    let embedding_id: Option<String> = None;
+    let stored: Option<bool> = None;
     
     Ok(Json(GenerateResponse {
         embedding,
@@ -189,59 +142,8 @@ pub async fn generate_batch_embeddings(
             )
         })?;
     
-    // Store in FalcorDB if client is available and metadata is provided
-    let (embedding_ids, stored) = if let Some(falcordb_client) = &app_state.falcordb_client {
-        if let (Some(doc_id_str), Some(src_id)) = (&request.document_id, &request.source_id) {
-            // Parse document_id
-            let document_id = Uuid::parse_str(doc_id_str)
-                .map_err(|e| {
-                    (
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse {
-                            error: "invalid_document_id".to_string(),
-                            message: "Invalid document_id format".to_string(),
-                            details: Some(e.to_string()),
-                        })
-                    )
-                })?;
-            
-            // Create vector chunks for batch storage
-            let chunks: Vec<VectorChunk> = response.embeddings.iter()
-                .zip(request.texts.iter())
-                .enumerate()
-                .map(|(idx, (embedding, text))| VectorChunk {
-                    id: Uuid::new_v4(),
-                    embedding: embedding.clone(),
-                    chunk_text: text.clone(),
-                    chunk_index: idx,
-                    document_id,
-                    source_id: src_id.clone(),
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
-                    metadata: request.metadata.clone().unwrap_or_else(|| serde_json::json!({})),
-                })
-                .collect();
-            
-            match falcordb_client.batch_store_chunks(chunks).await {
-                Ok(ids) => (Some(ids), Some(true)),
-                Err(e) => {
-                    tracing::error!("Failed to batch store vectors in FalcorDB: {}", e);
-                    return Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ErrorResponse {
-                            error: "storage_failed".to_string(),
-                            message: "Failed to store vectors in FalcorDB".to_string(),
-                            details: Some(e.to_string()),
-                        })
-                    ));
-                }
-            }
-        } else {
-            (None, Some(false))
-        }
-    } else {
-        (None, None)
-    };
+    let embedding_ids: Option<Vec<String>> = None;
+    let stored: Option<bool> = None;
     
     Ok(Json(BatchGenerateResponse {
         embeddings: response.embeddings,

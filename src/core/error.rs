@@ -16,11 +16,12 @@ pub enum EmbeddingError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
     
+    
     #[error("Database error: {0}")]
-    DatabaseError(#[from] sqlx::Error),
+    DatabaseError(String),
     
     #[error("Redis error: {0}")]
-    RedisError(#[from] redis::RedisError),
+    RedisError(String),
     
     #[error("Connection error: {0}")]
     ConnectionError(String),
