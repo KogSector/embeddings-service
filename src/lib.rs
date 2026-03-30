@@ -8,9 +8,9 @@ pub mod core;
 pub mod generators;
 pub mod models;
 // Events and storage removed for stateless embedding logic
-pub mod grpc_server;
 
-// Include generated protobuf code
+// Include generated protobuf code (removed - no longer needed for Kafka-only architecture)
+/*
 pub mod proto {
     pub mod confuse {
         pub mod embeddings {
@@ -20,6 +20,7 @@ pub mod proto {
         }
     }
 }
+*/
 
 use std::sync::Arc;
 use std::collections::HashMap;

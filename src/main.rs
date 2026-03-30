@@ -37,7 +37,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load configuration
     let config = Config::from_env()?;
     tracing::info!("Starting embeddings service on {}:{}", config.server.host, config.server.port);
-    tracing::info!("gRPC server on {}:{}", config.server.grpc_host, config.server.grpc_port);
 
     // Initialize service components
     let model_manager = Arc::new(ModelManager::new(config.clone()));
@@ -90,21 +89,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .layer(CorsLayer::permissive())
         );
 
-    // Start gRPC server in background (for unified-processor to call BatchEmbed/ProcessAndStoreChunks)
-    let grpc_state = app_state.clone();
-    let grpc_default_model = config.models.default_model.clone();
-    let grpc_host = config.server.grpc_host.clone();
-    let grpc_port = config.server.grpc_port;
-    tokio::spawn(async move {
-        if let Err(e) = embeddings_service::grpc_server::start_grpc_server(
-            grpc_state,
-            grpc_default_model,
-            grpc_host,
-            grpc_port,
-        ).await {
-            tracing::error!("Embeddings gRPC server failed: {}", e);
-        }
-    });
 
     // Start HTTP server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));

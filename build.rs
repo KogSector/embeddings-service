@@ -1,10 +1,5 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tonic_build::configure()
-        .build_server(true)
-        .build_client(true)
-        .compile(
-            &["proto/embeddings.proto"],
-            &["proto"],
-        )?;
+    // Build script simplified - no protobuf compilation needed for Kafka-only architecture
+    println!("cargo:rerun-if-changed=build.rs");
     Ok(())
 }
