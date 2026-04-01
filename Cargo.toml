@@ -2,7 +2,7 @@
 name = "embeddings-service"
 version = "0.1.0"
 edition = "2021"
-description = "Embedding generation and storage service for ConFuse platform with FalkorDB vector storage"
+description = "Embedding generation and storage service for ConFuse platform with Memgraph vector storage"
 license = "Proprietary"
 authors = ["ConFuse Team"]
 

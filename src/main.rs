@@ -1,5 +1,5 @@
 //! Main entry point for the embeddings service
-//! gRPC pipeline: unified-processor calls ProcessAndStoreChunks → generates embeddings → stores in FalkorDB
+//! gRPC pipeline: unified-processor calls ProcessAndStoreChunks → generates embeddings → stores in Memgraph
 
 use axum::{
     routing::{get, post},
