@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: embeddings-service-config
+  namespace: confuse
+data:
+  # Service Configuration
+  PORT: "3001"
+  HOST: "0.0.0.0"
+  ENVIRONMENT: "production"
+  
+  # gRPC Configuration
+  GRPC_PORT: "50054"
+  GRPC_HOST: "0.0.0.0"
+  
+  # Kafka Configuration
+  KAFKA_GROUP_ID: "embeddings-service"
+  KAFKA_CLIENT_ID: "embeddings-service"
+  KAFKA_CHUNKS_TOPIC: "chunks-topic"
+  KAFKA_EMBEDDINGS_TOPIC: "embeddings-topic"
+  
+  # Ollama Configuration
+  OLLAMA_BASE_URL: "http://ollama:11434"
+  DEFAULT_EMBEDDING_MODEL: "nomic-embed-text"
+  
+  # Processing Configuration
+  BATCH_SIZE: "32"
+  MAX_BATCH_SIZE: "128"
+  EMBEDDING_DIM: "768"
+  
+  # Performance Configuration
+  MAX_CONCURRENT_BATCHES: "4"
+  PROCESSING_TIMEOUT_SECONDS: "120"
+  
+  # Logging
+  RUST_LOG: "embeddings_service=debug,tower_http=debug"

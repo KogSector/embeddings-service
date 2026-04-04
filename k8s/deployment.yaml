@@ -1,0 +1,189 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embeddings-service
+  namespace: confuse
+  labels:
+    app: embeddings-service
+    service: embeddings
+    version: v1.0.0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: embeddings-service
+  template:
+    metadata:
+      labels:
+        app: embeddings-service
+        service: embeddings
+        version: v1.0.0
+    spec:
+      containers:
+      - name: embeddings-service
+        image: confuseimgr.azurecr.io/embeddings-service:v1.0.0
+        ports:
+        - containerPort: 3001
+          name: http
+        - containerPort: 50054
+          name: grpc
+        env:
+        # Service Configuration
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: PORT
+        - name: HOST
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: HOST
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: ENVIRONMENT
+        
+        # gRPC Configuration
+        - name: GRPC_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: GRPC_PORT
+        - name: GRPC_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: GRPC_HOST
+        
+        # Kafka Configuration (from shared infrastructure)
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: shared-infrastructure
+              key: confluent_bootstrap_servers
+        - name: KAFKA_GROUP_ID
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: KAFKA_GROUP_ID
+        - name: KAFKA_CLIENT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: KAFKA_CLIENT_ID
+        - name: KAFKA_CHUNKS_TOPIC
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: KAFKA_CHUNKS_TOPIC
+        - name: KAFKA_EMBEDDINGS_TOPIC
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: KAFKA_EMBEDDINGS_TOPIC
+        
+        # FalkorDB Configuration (from shared infrastructure)
+        - name: FALKORDB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: shared-infrastructure
+              key: falkordb_host
+        - name: FALKORDB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: shared-infrastructure
+              key: falkordb_port
+        - name: FALKORDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: shared-infrastructure-secrets
+              key: falkordb_password
+        
+        # Ollama Configuration
+        - name: OLLAMA_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: OLLAMA_BASE_URL
+        - name: DEFAULT_EMBEDDING_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: DEFAULT_EMBEDDING_MODEL
+        
+        # Processing Configuration
+        - name: BATCH_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: BATCH_SIZE
+        - name: MAX_BATCH_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: MAX_BATCH_SIZE
+        - name: EMBEDDING_DIM
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: EMBEDDING_DIM
+        
+        # Redis Configuration (from shared infrastructure)
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: shared-infrastructure
+              key: redis_host
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: shared-infrastructure
+              key: redis_port
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: shared-infrastructure-secrets
+              key: redis_password
+        
+        # Logging
+        - name: RUST_LOG
+          valueFrom:
+            configMapKeyRef:
+              name: embeddings-service-config
+              key: RUST_LOG
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+      
+      imagePullSecrets:
+      - name: acr-secret
+      
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000

@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: embeddings-service
+  namespace: confuse
+  labels:
+    app: embeddings-service
+    service: embeddings
+spec:
+  type: ClusterIP
+  selector:
+    app: embeddings-service
+  ports:
+  - name: http
+    port: 3001
+    targetPort: 3001
+    protocol: TCP
+  - name: grpc
+    port: 50054
+    targetPort: 50054
+    protocol: TCP
