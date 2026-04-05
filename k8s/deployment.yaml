@@ -101,12 +101,12 @@ spec:
               name: shared-infrastructure-secrets
               key: falkordb_password
         
-        # Ollama Configuration
+        # Ollama Configuration (from shared infrastructure)
         - name: OLLAMA_BASE_URL
           valueFrom:
             configMapKeyRef:
-              name: embeddings-service-config
-              key: OLLAMA_BASE_URL
+              name: shared-infrastructure
+              key: ollama_base_url
         - name: DEFAULT_EMBEDDING_MODEL
           valueFrom:
             configMapKeyRef:
