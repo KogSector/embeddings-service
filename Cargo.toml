@@ -2,7 +2,7 @@
 name = "embeddings-service"
 version = "0.1.0"
 edition = "2021"
-description = "Embedding generation and storage service for ConFuse platform with Memgraph vector storage"
+description = "Embedding generation service for ConFuse platform — generates vectors via local models and serves them to Graphiti for FalkorDB storage"
 license = "Proprietary"
 authors = ["ConFuse Team"]
 
@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[bin]]
-name = "embeddings-service"
+name = "embeddings-service-bin"
 path = "src/main.rs"
 
 [dependencies]

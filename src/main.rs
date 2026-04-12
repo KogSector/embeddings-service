@@ -1,5 +1,5 @@
-//! Main entry point for the embeddings service
-//! gRPC pipeline: unified-processor calls ProcessAndStoreChunks → generates embeddings → stores in Memgraph
+//! Main entry point for the embeddings service.
+//! Provides REST endpoints for embedding generation used by the Graphiti pipeline → FalkorDB.
 
 use axum::{
     routing::{get, post},
