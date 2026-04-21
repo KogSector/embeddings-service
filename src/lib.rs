@@ -7,6 +7,7 @@ pub mod api;
 pub mod core;
 pub mod generators;
 pub mod models;
+pub mod infra;
 // Events and storage removed for stateless embedding logic
 
 // Include generated protobuf code (removed - no longer needed for Kafka-only architecture)

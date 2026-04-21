@@ -18,7 +18,7 @@ name = "embeddings-service-bin"
 path = "src/main.rs"
 
 [dependencies]
-confuse-common = { path = "../shared-middleware/rust/confuse-common", features = ["axum-support"] }
+confuse-common = { path = "../shared-middleware/rust/confuse-common", features = ["axum-support", "kafka"] }
 
 # Web framework
 axum = { version = "0.7", features = ["macros"] }

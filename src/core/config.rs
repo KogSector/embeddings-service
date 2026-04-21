@@ -7,6 +7,16 @@ use std::time::Duration;
 pub struct Config {
     pub server: ServerConfig,
     pub models: ModelConfig,
+    pub kafka: KafkaConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KafkaConfig {
+    pub bootstrap_servers: String,
+    pub group_id: String,
+    pub input_topic: String,
+    pub output_topic: String,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,6 +56,13 @@ impl Default for Config {
                 ollama_url: None,
                 use_ollama: false,
             },
+            kafka: KafkaConfig {
+                bootstrap_servers: "localhost:9092".to_string(),
+                group_id: "embeddings-service".to_string(),
+                input_topic: "chunks.raw".to_string(),
+                output_topic: "embedding.generated".to_string(),
+                enabled: false,
+            },
         }
     }
 }
@@ -77,6 +94,23 @@ impl Config {
         }
         config.models.ollama_url = std::env::var("OLLAMA_URL").ok();
         config.models.use_ollama = std::env::var("USE_OLLAMA")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
+        // Kafka
+        if let Ok(bootstrap) = std::env::var("KAFKA_BOOTSTRAP_SERVERS") {
+            config.kafka.bootstrap_servers = bootstrap;
+        }
+        if let Ok(group) = std::env::var("KAFKA_GROUP_ID") {
+            config.kafka.group_id = group;
+        }
+        if let Ok(topic) = std::env::var("KAFKA_INPUT_TOPIC") {
+            config.kafka.input_topic = topic;
+        }
+        if let Ok(topic) = std::env::var("KAFKA_OUTPUT_TOPIC") {
+            config.kafka.output_topic = topic;
+        }
+        config.kafka.enabled = std::env::var("KAFKA_ENABLED")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
 

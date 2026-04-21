@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     python3-pip \
     build-essential \
+    cmake \
+    libsasl2-dev \
+    librdkafka-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -28,10 +31,10 @@ COPY embeddings-service/Cargo.toml embeddings-service/Cargo.lock* ./
 RUN sed -i 's|path = "../shared-middleware/rust/confuse-common"|path = "./shared-middleware/rust/confuse-common"|g' Cargo.toml && rm -f Cargo.lock
 
 # Create dummy src for dependency caching
-RUN mkdir -p src/api src/core src/generators src/models src/storage && \
+RUN mkdir -p src/api src/core src/generators src/models src/infra && \
     echo 'fn main() {}' > src/main.rs && \
     touch src/lib.rs && \
-    touch src/api/mod.rs src/core/mod.rs src/generators/mod.rs src/models/mod.rs src/storage/mod.rs
+    touch src/api/mod.rs src/core/mod.rs src/generators/mod.rs src/models/mod.rs src/infra/mod.rs
 
 # Copy shared library
 COPY shared-middleware ./shared-middleware
@@ -46,7 +49,7 @@ RUN rm -rf src/*
 COPY embeddings-service/src/ ./src/
 
 # Build the application
-RUN cargo build --release
+RUN cargo build --release --features kafka
 
 # Stage 2: Python dependencies for ML models
 FROM python:3.14-slim AS python-builder
@@ -73,6 +76,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libpq5 \
     dumb-init \
+    librdkafka1 \
+    libsasl2-2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages

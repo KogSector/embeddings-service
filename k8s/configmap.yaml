@@ -14,10 +14,11 @@ data:
   GRPC_HOST: "0.0.0.0"
   
   # Kafka Configuration
+  KAFKA_ENABLED: "true"
   KAFKA_GROUP_ID: "embeddings-service"
   KAFKA_CLIENT_ID: "embeddings-service"
-  KAFKA_CHUNKS_TOPIC: "chunks-topic"
-  KAFKA_EMBEDDINGS_TOPIC: "embeddings-topic"
+  KAFKA_CHUNKS_TOPIC: "chunks.raw"
+  KAFKA_EMBEDDINGS_TOPIC: "embedding.generated"
   
   # Processing Configuration
   BATCH_SIZE: "32"

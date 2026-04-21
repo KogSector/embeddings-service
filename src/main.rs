@@ -51,6 +51,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         model_manager: model_manager.clone(),
     };
 
+    // Initialize and start Kafka worker if enabled
+    if config.kafka.enabled {
+        let kafka_worker = embeddings_service::infra::kafka_worker::KafkaWorker::new(
+            config.clone(),
+            model_manager.clone(),
+        )?;
+        
+        tokio::spawn(async move {
+            if let Err(e) = kafka_worker.start().await {
+                tracing::error!("Kafka worker failed: {}", e);
+            }
+        });
+    }
+
     // -- Shared Middleware (from confuse-common) --
     let auth_service_url = std::env::var("AUTH_MIDDLEWARE_URL")
         .unwrap_or_else(|_| "http://auth-middleware:3010".to_string());
