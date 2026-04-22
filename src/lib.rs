@@ -24,9 +24,8 @@ pub mod proto {
 */
 
 use std::sync::Arc;
-use std::collections::HashMap;
 use crate::core::{Config, Result};
-use crate::models::ModelManager;
+pub use crate::models::{ModelManager, EmbeddingModel};
 
 
 // Application state for Axum

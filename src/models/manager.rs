@@ -89,4 +89,16 @@ impl ModelManager {
         tracing::info!("Unloaded model: {}", model_name);
         Ok(())
     }
+
+    pub fn get_default_model_name(&self) -> &str {
+        &self.config.models.default_model
+    }
+
+    pub async fn generate_embeddings(&self, text: &str, model_name: Option<&str>) -> Result<Vec<f32>> {
+        let name = model_name.unwrap_or(&self.config.models.default_model);
+        let model = self.ensure_model_loaded(name).await?;
+        let embeddings = model.generate(vec![text.to_string()]).await?;
+        
+        embeddings.into_iter().next().ok_or_else(|| EmbeddingError::GenerationError("No embedding returned from model".to_string()))
+    }
 }

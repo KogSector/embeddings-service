@@ -6,8 +6,7 @@ use axum::{
     response::Json,
 };
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
+use crate::models::{ModelManager, EmbeddingModel};
 use crate::generators::BatchGenerator;
 use crate::AppState;
 

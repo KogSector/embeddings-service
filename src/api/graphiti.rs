@@ -8,7 +8,8 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::models::ModelManager;
+use crate::models::{ModelManager, EmbeddingModel};
+use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
 pub struct GraphitiEmbeddingRequest {
