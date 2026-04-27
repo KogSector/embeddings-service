@@ -68,11 +68,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // -- Shared Middleware (from confuse-common) --
     let auth_service_url = std::env::var("AUTH_MIDDLEWARE_URL")
         .unwrap_or_else(|_| "http://auth-middleware:3010".to_string());
+    let auth_grpc_url = std::env::var("AUTH_GRPC_URL")
+        .unwrap_or_else(|_| "http://localhost:50058".to_string());
     let auth_bypass = std::env::var("AUTH_BYPASS_ENABLED")
         .unwrap_or_else(|_| "false".to_string())
         .parse::<bool>()
         .unwrap_or(false);
-    let auth_layer = confuse_common::middleware::AxumAuthLayer::new(auth_service_url, auth_bypass);
+    let auth_layer = confuse_common::middleware::AxumAuthLayer::with_grpc(
+        auth_service_url,
+        auth_grpc_url,
+        auth_bypass,
+    ).await;
 
     let rate_limit = confuse_common::middleware::AxumRateLimitConfig::default_for_service(20);
 
