@@ -95,12 +95,11 @@ impl KafkaWorker {
                             }
 
                             embeddings.push(SimplifiedEmbedding {
-                                chunk_id: chunk.chunk_id,
-                                file_id: chunk.file_id,
-                                chunk_type: chunk.chunk_type,
-                                content: chunk.content,
-                                language: chunk.language,
-                                embedding: vector,
+                                chunk_id: chunk.chunk_id.clone(),
+                                file_id: chunk.file_id.clone(),
+                                chunk_type: chunk.chunk_type.clone(),
+                                language: chunk.language.clone(),
+                                embedding: vector.clone(),
                                 model: model_name,
                                 dimension,
                             });
