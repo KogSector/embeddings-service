@@ -52,17 +52,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Initialize and start Kafka worker if enabled
-    if config.kafka.enabled {
-        let kafka_worker = embeddings_service::infra::kafka_worker::KafkaWorker::new(
-            config.clone(),
-            model_manager.clone(),
-        )?;
-        
-        tokio::spawn(async move {
-            if let Err(e) = kafka_worker.start().await {
-                tracing::error!("Kafka worker failed: {}", e);
-            }
-        });
+    #[cfg(feature = "kafka")]
+    {
+        if config.kafka.enabled {
+            let kafka_worker = embeddings_service::infra::kafka_worker::KafkaWorker::new(
+                config.clone(),
+                model_manager.clone(),
+            )?;
+
+            tokio::spawn(async move {
+                if let Err(e) = kafka_worker.start().await {
+                    tracing::error!("Kafka worker failed: {}", e);
+                }
+            });
+        } else {
+            tracing::info!("Kafka disabled via KAFKA_ENABLED env var. Skipping Kafka worker initialization.");
+        }
+    }
+
+    #[cfg(not(feature = "kafka"))]
+    {
+        tracing::info!("Kafka feature not compiled. Skipping Kafka worker initialization.");
     }
 
     // -- Shared Middleware (from confuse-common) --
