@@ -20,8 +20,8 @@ path = "src/main.rs"
 [dependencies]
 confuse-common = { path = "../shared-middleware/rust/confuse-common", features = ["axum-support", "kafka"] }
 
-# Kafka for event streaming
-rdkafka = { version = "0.36", features = ["cmake-build", "ssl"] }
+# Kafka for event streaming (SSL disabled for Windows compatibility)
+rdkafka = { version = "0.36", features = ["cmake-build"] }
 
 # Web framework
 axum = { version = "0.7", features = ["macros"] }
