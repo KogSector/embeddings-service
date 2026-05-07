@@ -18,10 +18,10 @@ name = "embeddings-service-bin"
 path = "src/main.rs"
 
 [dependencies]
-confuse-common = path = "../shared-middleware/rust/confuse-common", features = ["axum-support"] }
+confuse-common = { path = "../shared-middleware/rust/confuse-common", features = ["axum-support", "kafka"] }
 
-# Kafka for event streaming (optional - enable with --features kafka)
-rdkafka = { version = "0.36", features = ["cmake-build", "ssl"], optional = true }
+# Kafka for event streaming
+rdkafka = { version = "0.36", features = ["cmake-build", "ssl"] }
 
 # Web framework
 axum = { version = "0.7", features = ["macros"] }

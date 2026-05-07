@@ -110,9 +110,7 @@ impl Config {
         if let Ok(topic) = std::env::var("KAFKA_OUTPUT_TOPIC") {
             config.kafka.output_topic = topic;
         }
-        config.kafka.enabled = std::env::var("KAFKA_ENABLED")
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(false);
+        config.kafka.enabled = true; // Kafka is always required
 
         Ok(config)
     }

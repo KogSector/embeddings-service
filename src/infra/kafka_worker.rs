@@ -41,11 +41,33 @@ impl KafkaWorker {
             return Ok(());
         }
 
-        info!("Starting Kafka worker for embeddings-service");
-        self.consumer.subscribe(&[&self.config.kafka.input_topic]).await?;
+        info!("Starting Kafka worker for embeddings-service with retry on disconnection");
+
+        loop {
+            match self.start_worker().await {
+                Ok(_) => {
+                    info!("Kafka worker stopped gracefully");
+                    break;
+                }
+                Err(e) => {
+                    error!("Kafka worker error: {}. Retrying in 5 seconds...", e);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn start_worker(&self) -> Result<()> {
+        let consumer = EventConsumer::new(
+            &self.config.kafka.bootstrap_servers,
+            &self.config.kafka.group_id,
+        )?;
+        consumer.subscribe(&[&self.config.kafka.input_topic]).await?;
 
         let model_manager = self.model_manager.clone();
-        let producer = Arc::new(self.producer);
+        let producer = Arc::new(EventProducer::new(&self.config.kafka.bootstrap_servers)?);
         let config = self.config.clone();
 
         let graphify_enabled = std::env::var("GRAPHIFY_EPISODE_EMISSION_ENABLED")

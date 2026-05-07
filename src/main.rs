@@ -38,6 +38,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     tracing::info!("Starting embeddings service on {}:{}", config.server.host, config.server.port);
 
+    // Check Kafka health before starting (Kafka is required)
+    tracing::info!("Checking Kafka connectivity...");
+    use confuse_common::events::EventProducer;
+    match EventProducer::new(&config.kafka.bootstrap_servers) {
+        Ok(_) => tracing::info!("Kafka health check passed"),
+        Err(e) => {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                format!("Kafka is required but not available: {}", e)
+            )));
+        }
+    }
+
     // Initialize service components
     let model_manager = Arc::new(ModelManager::new(config.clone()));
     
@@ -51,29 +64,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         model_manager: model_manager.clone(),
     };
 
-    // Initialize and start Kafka worker if enabled
-    #[cfg(feature = "kafka")]
-    {
-        if config.kafka.enabled {
-            let kafka_worker = embeddings_service::infra::kafka_worker::KafkaWorker::new(
-                config.clone(),
-                model_manager.clone(),
-            )?;
+    // Initialize and start Kafka worker (required for service to function)
+    let kafka_worker = embeddings_service::infra::kafka_worker::KafkaWorker::new(
+        config.clone(),
+        model_manager.clone(),
+    )?;
 
-            tokio::spawn(async move {
-                if let Err(e) = kafka_worker.start().await {
-                    tracing::error!("Kafka worker failed: {}", e);
-                }
-            });
-        } else {
-            tracing::info!("Kafka disabled via KAFKA_ENABLED env var. Skipping Kafka worker initialization.");
+    tokio::spawn(async move {
+        if let Err(e) = kafka_worker.start().await {
+            tracing::error!("Kafka worker failed: {}", e);
         }
-    }
-
-    #[cfg(not(feature = "kafka"))]
-    {
-        tracing::info!("Kafka feature not compiled. Skipping Kafka worker initialization.");
-    }
+    });
 
     // -- Shared Middleware (from confuse-common) --
     let auth_service_url = std::env::var("AUTH_MIDDLEWARE_URL")
