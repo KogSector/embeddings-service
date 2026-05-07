@@ -19,12 +19,11 @@ use embeddings_service::{
           generate_graphiti_embeddings, process_chunks, list_graphiti_models, graphiti_health},
     core::Config,
     models::ModelManager,
-    EmbeddingsService,
 };
 
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     // Load environment variables from .env.map (non-sensitive) and .env.secret (sensitive overrides)
     dotenvy::from_filename(".env.map").ok();
     dotenvy::from_filename(".env.secret").ok();
@@ -41,15 +40,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Check Kafka health before starting (Kafka is required)
     tracing::info!("Checking Kafka connectivity...");
     use confuse_common::events::EventProducer;
-    match EventProducer::new(&config.kafka.bootstrap_servers) {
-        Ok(_) => tracing::info!("Kafka health check passed"),
-        Err(e) => {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::ConnectionRefused,
-                format!("Kafka is required but not available: {}", e)
-            )));
-        }
-    }
+    EventProducer::new(&config.kafka.bootstrap_servers)
+        .map_err(|e| anyhow::anyhow!("Kafka is required but not available: {}", e))?;
+    tracing::info!("Kafka health check passed");
 
     // Initialize service components
     let model_manager = Arc::new(ModelManager::new(config.clone()));
@@ -57,8 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Ensure default model is loaded at startup
     model_manager.ensure_model_loaded(&config.models.default_model)
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        .await?;
 
     let app_state = embeddings_service::AppState {
         model_manager: model_manager.clone(),

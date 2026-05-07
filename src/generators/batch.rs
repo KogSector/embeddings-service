@@ -1,7 +1,7 @@
 //! Batch embedding generation
 
 use crate::core::Result;
-use crate::models::{ModelManager, EmbeddingModel};
+use crate::models::ModelManager;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 

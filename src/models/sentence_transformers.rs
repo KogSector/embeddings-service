@@ -3,7 +3,6 @@
 use crate::core::{Config, Result, EmbeddingError};
 use async_trait::async_trait;
 use pyo3::prelude::*;
-use std::collections::HashMap;
 use tokio::task;
 
 pub struct SentenceTransformersModel {

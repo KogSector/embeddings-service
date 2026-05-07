@@ -8,7 +8,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
-use crate::models::EmbeddingModel;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HealthResponse {

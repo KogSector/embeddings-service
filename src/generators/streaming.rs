@@ -1,9 +1,8 @@
 //! Streaming embedding generation for large datasets
 
 use crate::core::Result;
-use crate::models::{ModelManager, EmbeddingModel};
+use crate::models::ModelManager;
 use futures::stream::{self, Stream, StreamExt};
-use std::pin::Pin;
 
 pub struct StreamingGenerator {
     model_manager: ModelManager,

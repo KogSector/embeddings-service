@@ -144,7 +144,7 @@ impl KafkaWorker {
                     };
 
                     // Use resilient publish with retry and DLQ fallback
-                    if let Err(e) = producer.publish_with_retry(&output_topic, &output_event).await {
+                    if let Err(e) = producer.publish_with_retry(&output_topic, &output_event, 3, None).await {
                         error!("Failed to publish embeddings event after retries for source {}: {}", event.source_id, e);
                     } else {
                         info!("Published {} embeddings for source: {}", output_event.chunks.len(), event.source_id);
@@ -159,7 +159,7 @@ impl KafkaWorker {
                         match ep.to_kafka_payload() {
                             Ok(payload) => {
                                 // Publish Graphify episodes using resilient publish
-                                if let Err(e) = producer.publish_with_retry(topic, &payload).await {
+                                if let Err(e) = producer.publish_with_retry(topic, &payload, 3, None).await {
                                     warn!("Graphify episode publish failed after retries: {}", e);
                                 } else {
                                     published += 1;
