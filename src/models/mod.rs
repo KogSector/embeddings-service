@@ -1,9 +1,7 @@
 //! Model management for the embeddings service
 
 pub mod manager;
-pub mod sentence_transformers;
-pub mod ollama;
+pub mod models;
 
-pub use manager::{ModelManager, EmbeddingModel};
-pub use sentence_transformers::SentenceTransformersModel;
-pub use ollama::OllamaModel;
+pub use manager::{ModelManager};
+pub use models::{EmbeddingModel, OllamaModel, SentenceTransformersModel, ModelType};

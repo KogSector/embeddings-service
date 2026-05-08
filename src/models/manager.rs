@@ -1,27 +1,11 @@
 //! Model manager for loading and managing embedding models
 
-use crate::core::{Config, Result, EmbeddingError};
-use async_trait::async_trait;
+use crate::{Config, Result, EmbeddingError, EmbeddingModel};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[async_trait]
-pub trait EmbeddingModel: Send + Sync {
-    fn name(&self) -> &str;
-    fn dimension(&self) -> usize;
-    async fn generate(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>>;
-    async fn generate_batch(&self, texts: Vec<String>, batch_size: usize) -> Result<Vec<Vec<f32>>> {
-        let mut embeddings = Vec::new();
-        
-        for chunk in texts.chunks(batch_size) {
-            let chunk_embeddings = self.generate(chunk.to_vec()).await?;
-            embeddings.extend(chunk_embeddings);
-        }
-        
-        Ok(embeddings)
-    }
-}
+// EmbeddingModel trait is defined in models.rs
 
 #[derive(Clone)]
 pub struct ModelManager {
@@ -46,10 +30,10 @@ impl ModelManager {
 
         let model: Arc<dyn EmbeddingModel> = if self.config.models.use_ollama {
             tracing::info!("Loading Ollama model: {}", model_name);
-            Arc::new(crate::models::OllamaModel::new(model_name, &self.config)?)
+            Arc::new(crate::models::models::OllamaModel::new(model_name, &self.config)?)
         } else {
             tracing::info!("Loading SentenceTransformers model: {}", model_name);
-            Arc::new(crate::models::SentenceTransformersModel::new(model_name, &self.config)?)
+            Arc::new(crate::models::models::SentenceTransformersModel::new(model_name, &self.config)?)
         };
 
         models.insert(model_name.to_string(), model);

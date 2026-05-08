@@ -2,7 +2,7 @@
 name = "embeddings-service"
 version = "0.1.0"
 edition = "2021"
-description = "Embedding generation service for ConFuse platform — generates vectors via local models and serves them to Graphiti for FalkorDB storage"
+description = "Embedding generation service for ConFuse platform — generates vectors via Kafka for unified-processor to store in FalkorDB"
 license = "Proprietary"
 authors = ["ConFuse Team"]
 

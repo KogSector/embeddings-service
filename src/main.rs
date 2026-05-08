@@ -1,5 +1,5 @@
 //! Main entry point for the embeddings service.
-//! Provides REST endpoints for embedding generation used by the Graphiti pipeline → FalkorDB.
+//! Provides REST endpoints for embedding generation via Kafka communication with unified-processor.
 
 use axum::{
     routing::{get, post},
@@ -15,9 +15,8 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use embeddings_service::{
-    api::{health_check, generate_embeddings, generate_batch_embeddings,
-          generate_graphiti_embeddings, process_chunks, list_graphiti_models, graphiti_health},
-    core::Config,
+    api::{generate_embeddings, generate_batch_embeddings},
+    Config,
     models::ModelManager,
 };
 
@@ -85,22 +84,11 @@ async fn main() -> anyhow::Result<()> {
 
     let rate_limit = confuse_common::middleware::AxumRateLimitConfig::default_for_service(20);
 
-    // Build router — generate-only endpoints with FalcorDB storage
+    // Build router — generate-only endpoints (Kafka-based communication with unified-processor)
     let app = Router::new()
-        // Health
-        .route("/health", get(health_check))
         // Generation endpoints
         .route("/api/v1/generate", post(generate_embeddings))
         .route("/api/v1/generate/batch", post(generate_batch_embeddings))
-        // Graphiti endpoints
-        .route("/api/v1/graphiti/health", get(graphiti_health))
-        .route("/api/v1/graphiti/generate", post(generate_graphiti_embeddings))
-        .route("/api/v1/graphiti/chunks", post(process_chunks))
-        .route("/api/v1/graphiti/models", get(list_graphiti_models))
-        // FalcorDB endpoints (commented out for now)
-        // .route("/api/v1/falcordb/store", post(store_embeddings_falcordb))\
-        // .route("/api/v1/falcordb/stats", get(get_falcordb_stats))
-        // .route("/api/v1/falcordb/test", get(test_falcordb_connection))
         .with_state(app_state.clone())
         .layer(axum::middleware::from_fn(confuse_common::middleware::security_headers_middleware))
         .layer(axum::middleware::from_fn(confuse_common::middleware::zero_trust_middleware))

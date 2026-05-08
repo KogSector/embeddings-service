@@ -1,10 +1,11 @@
 //! Embeddings Service Library
 //! 
 //! A high-performance embedding generation service
-//! for the ConFuse platform with FalcorDB vector storage.
+//! for the ConFuse platform (generate-only, Kafka-based).
 
 pub mod api;
-pub mod core;
+pub mod config;
+pub mod error;
 pub mod generators;
 pub mod models;
 pub mod infra;
@@ -24,7 +25,8 @@ pub mod proto {
 */
 
 use std::sync::Arc;
-use crate::core::{Config, Result};
+pub use crate::config::Config;
+pub use crate::error::{EmbeddingError, Result};
 pub use crate::models::{ModelManager, EmbeddingModel};
 
 
@@ -65,10 +67,10 @@ impl EmbeddingsService {
         let embedding = embedding_model
             .generate(vec![content.to_string()])
             .await
-            .map_err(|e| crate::core::EmbeddingError::GenerationError(format!("Failed to generate embedding: {}", e)))?;
+            .map_err(|e| crate::EmbeddingError::GenerationError(format!("Failed to generate embedding: {}", e)))?;
         
         let embedding = embedding.into_iter().next()
-            .ok_or_else(|| crate::core::EmbeddingError::GenerationError("No embedding generated".to_string()))?;
+            .ok_or_else(|| crate::EmbeddingError::GenerationError("No embedding generated".to_string()))?;
         
         tracing::debug!(
             "Generated embedding for chunk {} from source {}: {} dimensions",

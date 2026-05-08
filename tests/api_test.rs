@@ -1,17 +1,9 @@
-//! Tests for embedding generation endpoints with FalcorDB integration
+//! Tests for embedding generation endpoints (generate-only, Kafka-based)
 
 #[cfg(test)]
 mod tests {
-    use super::super::*;
-    use crate::AppState;
-    use crate::models::ModelManager;
-    use crate::core::Config;
-    use std::sync::Arc;
-    use axum::{
-        body::Body,
-        http::{Request, StatusCode},
-    };
-    use tower::ServiceExt;
+    use embeddings_service::api::generate::{GenerateRequest, GenerateResponse, BatchGenerateRequest, BatchGenerateResponse, ErrorResponse};
+    use embeddings_service::core::Config;
     use serde_json::json;
 
     #[tokio::test]
@@ -24,8 +16,7 @@ mod tests {
             "source_id": "test-source",
             "chunk_index": 0,
             "metadata": {"key": "value"}
-        });
-
+        
         let request: GenerateRequest = serde_json::from_value(json_data).unwrap();
         assert_eq!(request.text, "Test text");
         assert_eq!(request.document_id, Some("550e8400-e29b-41d4-a716-446655440000".to_string()));

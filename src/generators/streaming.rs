@@ -1,6 +1,6 @@
 //! Streaming embedding generation for large datasets
 
-use crate::core::Result;
+use crate::Result;
 use crate::models::ModelManager;
 use futures::stream::{self, Stream, StreamExt};
 

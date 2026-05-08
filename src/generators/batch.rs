@@ -1,6 +1,6 @@
 //! Batch embedding generation
 
-use crate::core::Result;
+use crate::Result;
 use crate::models::ModelManager;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -60,6 +60,6 @@ impl BatchGenerator {
         response.embeddings
             .into_iter()
             .next()
-            .ok_or_else(|| crate::core::EmbeddingError::GenerationError("No embedding generated".to_string()))
+            .ok_or_else(|| crate::EmbeddingError::GenerationError("No embedding generated".to_string()))
     }
 }
