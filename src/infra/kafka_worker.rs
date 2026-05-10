@@ -73,7 +73,7 @@ impl KafkaWorker {
 
             Box::pin(async move {
                 let chunk_count = event.chunks.len();
-                info!("Processing {} chunks for source: {}", chunk_count, event.source_id);
+                info!("Processing {} chunks for source: {}. Event details: {:?}", chunk_count, event.source_id, event);
 
                 // Pre-allocate with known capacity — avoids reallocations.
                 let mut embeddings = Vec::with_capacity(chunk_count);
