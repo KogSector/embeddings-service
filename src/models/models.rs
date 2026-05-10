@@ -156,14 +156,50 @@ impl SentenceTransformersModel {
         texts: Vec<String>,
         _max_batch_size: usize,
     ) -> Result<Vec<Vec<f32>>> {
-        let st_module = py.import("sentence_transformers")
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to import sentence_transformers: {}", e)))?;
+        // Use a global dictionary in the __main__ module to cache models
+        let sys = py.import("sys")
+            .map_err(|e| EmbeddingError::PythonError(format!("Failed to import sys: {}", e)))?;
+        let modules = sys.getattr("modules")
+            .map_err(|e| EmbeddingError::PythonError(format!("Failed to get sys.modules: {}", e)))?;
+        let main = modules.get_item("__main__")
+            .map_err(|e| EmbeddingError::PythonError(format!("Failed to get __main__ module: {}", e)))?;
+        
+        let globals = main.getattr("__dict__")
+            .map_err(|e| EmbeddingError::PythonError(format!("Failed to get __main__.__dict__: {}", e)))?;
 
-        let model_class = st_module.getattr("SentenceTransformer")
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to get SentenceTransformer class: {}", e)))?;
+        // Check if models_cache exists in globals, if not create it
+        if !globals.contains("_embeddings_models_cache").unwrap_or(false) {
+            let dict = pyo3::types::PyDict::new(py);
+            globals.set_item("_embeddings_models_cache", dict)
+                .map_err(|e| EmbeddingError::PythonError(format!("Failed to create models_cache: {}", e)))?;
+        }
+        
+        let globals_dict = globals.downcast::<pyo3::types::PyDict>()
+            .map_err(|e| EmbeddingError::PythonError(format!("globals is not a dict: {}", e)))?;
+            
+        let cache = globals_dict.get_item("_embeddings_models_cache")
+            .map_err(|e| EmbeddingError::PythonError(format!("Failed to get models_cache from globals: {}", e)))?
+            .ok_or_else(|| EmbeddingError::PythonError("models_cache not found in globals".to_string()))?;
+            
+        let cache_dict = cache.downcast::<pyo3::types::PyDict>()
+            .map_err(|e| EmbeddingError::PythonError(format!("models_cache is not a dict: {}", e)))?;
+            
+        let model = if let Some(m) = cache_dict.get_item(model_name).map_err(|e| EmbeddingError::PythonError(format!("Failed to get model from cache: {}", e)))? {
+            m
+        } else {
+            let st_module = py.import("sentence_transformers")
+                .map_err(|e| EmbeddingError::PythonError(format!("Failed to import sentence_transformers: {}", e)))?;
 
-        let model = model_class.call1((model_name,))
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to create model {}: {}", model_name, e)))?;
+            let model_class = st_module.getattr("SentenceTransformer")
+                .map_err(|e| EmbeddingError::PythonError(format!("Failed to get SentenceTransformer class: {}", e)))?;
+
+            let m = model_class.call1((model_name,))
+                .map_err(|e| EmbeddingError::PythonError(format!("Failed to create model {}: {}", model_name, e)))?;
+            
+            cache_dict.set_item(model_name, &m)
+                .map_err(|e| EmbeddingError::PythonError(format!("Failed to cache model: {}", e)))?;
+            m
+        };
 
         let py_texts = pyo3::types::PyList::new(py, &texts)
             .map_err(|e| EmbeddingError::PythonError(format!("Failed to create Python list: {}", e)))?;
@@ -171,10 +207,10 @@ impl SentenceTransformersModel {
         let embeddings = model.call_method1("encode", (py_texts,))
             .map_err(|e| EmbeddingError::PythonError(format!("Failed to encode texts: {}", e)))?;
 
-        let embeddings = embeddings.call_method0("tolist")
+        let embeddings_list = embeddings.call_method0("tolist")
             .map_err(|e| EmbeddingError::PythonError(format!("Failed to convert embeddings: {}", e)))?;
 
-        embeddings.extract::<Vec<Vec<f32>>>()
+        embeddings_list.extract::<Vec<Vec<f32>>>()
             .map_err(|e| EmbeddingError::PythonError(format!("Failed to extract embeddings: {}", e)))
     }
 }

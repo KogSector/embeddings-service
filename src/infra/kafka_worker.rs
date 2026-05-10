@@ -123,7 +123,7 @@ impl KafkaWorker {
             }) as futures::future::BoxFuture<'static, Result<()>>
         });
 
-        self.consumer.consume(handler).await?;
+        consumer.consume(handler).await?;
         Ok(())
     }
 }
