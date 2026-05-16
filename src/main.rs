@@ -15,7 +15,7 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use embeddings_service::{
-    api::{generate_embeddings, generate_batch_embeddings},
+    api::{generate_embeddings, generate_batch_embeddings, health_check},
     Config,
     models::ModelManager,
 };
@@ -84,16 +84,22 @@ async fn main() -> anyhow::Result<()> {
 
     let rate_limit = confuse_common::middleware::AxumRateLimitConfig::default_for_service(20);
 
-    // Build router — generate-only endpoints (Kafka-based communication with unified-processor)
-    let app = Router::new()
+    // Build protected routes (behind auth)
+    let protected_routes = Router::new()
         // Generation endpoints
         .route("/api/v1/generate", post(generate_embeddings))
         .route("/api/v1/generate/batch", post(generate_batch_embeddings))
         .with_state(app_state.clone())
+        .layer(axum::middleware::from_fn_with_state(rate_limit.clone(), confuse_common::middleware::axum_rate_limit_middleware))
+        .layer(axum::middleware::from_fn_with_state(auth_layer.clone(), confuse_common::middleware::axum_auth_middleware));
+
+    // Build overall app router
+    let app = Router::new()
+        // Health endpoint (no auth required)
+        .route("/health", get(health_check))
+        .merge(protected_routes)
         .layer(axum::middleware::from_fn(confuse_common::middleware::security_headers_middleware))
         .layer(axum::middleware::from_fn(confuse_common::middleware::zero_trust_middleware))
-        .layer(axum::middleware::from_fn_with_state(rate_limit.clone(), confuse_common::middleware::axum_rate_limit_middleware))
-        .layer(axum::middleware::from_fn_with_state(auth_layer.clone(), confuse_common::middleware::axum_auth_middleware))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
