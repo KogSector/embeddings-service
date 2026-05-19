@@ -146,7 +146,12 @@ impl SentenceTransformersModel {
             "sentence-transformers/all-MiniLM-L6-v2" => 384,
             "sentence-transformers/all-mpnet-base-v2" => 768,
             "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" => 384,
-            _ => 384,
+            // 1024-dim models
+            "BAAI/bge-large-en-v1.5" => 1024,
+            "BAAI/bge-large-en" => 1024,
+            "sentence-transformers/gtr-t5-large" => 768,
+            "thenlper/gte-large" => 1024,
+            _ => 1024, // default to 1024 for unknown models
         }
     }
 

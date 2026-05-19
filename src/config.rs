@@ -45,7 +45,7 @@ impl Default for Config {
                 workers: 4,
             },
             models: ModelConfig {
-                default_model: "sentence-transformers/all-MiniLM-L6-v2".to_string(),
+                default_model: "BAAI/bge-large-en-v1.5".to_string(),
                 models_dir: "./models".to_string(),
                 max_batch_size: 32,
                 timeout: Duration::from_secs(30),
