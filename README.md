@@ -104,7 +104,6 @@ embeddings-service/
 
 The embeddings service integrates with:
 - **unified-processor**: For document and code processing
-- **relation-graph**: For knowledge graph operations
 - **api-backend**: For API gateway routing
 
 ## Development
