@@ -29,11 +29,9 @@ pub struct ServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelConfig {
     pub default_model: String,
-    pub models_dir: String,
     pub max_batch_size: usize,
     pub timeout: Duration,
     pub ollama_url: Option<String>,
-    pub use_ollama: bool,
 }
 
 impl Default for Config {
@@ -45,12 +43,10 @@ impl Default for Config {
                 workers: 4,
             },
             models: ModelConfig {
-                default_model: "BAAI/bge-large-en-v1.5".to_string(),
-                models_dir: "./models".to_string(),
+                default_model: "nomic-embed-text".to_string(),
                 max_batch_size: 32,
                 timeout: Duration::from_secs(30),
                 ollama_url: None,
-                use_ollama: false,
             },
             kafka: KafkaConfig {
                 bootstrap_servers: "localhost:9092".to_string(),
@@ -82,9 +78,6 @@ impl Config {
             config.models.max_batch_size = batch_size.parse().unwrap_or(32);
         }
         config.models.ollama_url = std::env::var("OLLAMA_URL").ok();
-        config.models.use_ollama = std::env::var("USE_OLLAMA")
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(false);
 
         // Kafka
         if let Ok(bootstrap) = std::env::var("KAFKA_BOOTSTRAP_SERVERS") {

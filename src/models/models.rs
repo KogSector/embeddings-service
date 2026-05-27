@@ -3,11 +3,8 @@
 
 use crate::{Config, Result, EmbeddingError};
 use async_trait::async_trait;
-use pyo3::prelude::*;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
-use tokio::task;
 
 /// Embedding model trait
 #[async_trait]
@@ -124,145 +121,14 @@ impl EmbeddingModel for OllamaModel {
     }
 }
 
-/// SentenceTransformers-based embedding model (Python via PyO3)
-pub struct SentenceTransformersModel {
-    name: String,
-    dimension: usize,
-    max_batch_size: usize,
-}
-
-impl SentenceTransformersModel {
-    pub fn new(name: &str, _config: &Config) -> Result<Self> {
-        let dimension = Self::get_model_dimension(name);
-        Ok(Self {
-            name: name.to_string(),
-            dimension,
-            max_batch_size: 32,
-        })
-    }
-
-    fn get_model_dimension(model_name: &str) -> usize {
-        match model_name {
-            "sentence-transformers/all-MiniLM-L6-v2" => 384,
-            "sentence-transformers/all-mpnet-base-v2" => 768,
-            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" => 384,
-            // 1024-dim models
-            "BAAI/bge-large-en-v1.5" => 1024,
-            "BAAI/bge-large-en" => 1024,
-            "sentence-transformers/gtr-t5-large" => 768,
-            "thenlper/gte-large" => 1024,
-            _ => 1024, // default to 1024 for unknown models
-        }
-    }
-
-    fn generate_with_python(
-        py: Python<'_>,
-        model_name: &str,
-        texts: Vec<String>,
-        _max_batch_size: usize,
-    ) -> Result<Vec<Vec<f32>>> {
-        // Use a global dictionary in the __main__ module to cache models
-        let sys = py.import("sys")
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to import sys: {}", e)))?;
-        let modules = sys.getattr("modules")
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to get sys.modules: {}", e)))?;
-        let main = modules.get_item("__main__")
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to get __main__ module: {}", e)))?;
-        
-        let globals = main.getattr("__dict__")
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to get __main__.__dict__: {}", e)))?;
-
-        // Check if models_cache exists in globals, if not create it
-        if !globals.contains("_embeddings_models_cache").unwrap_or(false) {
-            let dict = pyo3::types::PyDict::new(py);
-            globals.set_item("_embeddings_models_cache", dict)
-                .map_err(|e| EmbeddingError::PythonError(format!("Failed to create models_cache: {}", e)))?;
-        }
-        
-        let globals_dict = globals.downcast::<pyo3::types::PyDict>()
-            .map_err(|e| EmbeddingError::PythonError(format!("globals is not a dict: {}", e)))?;
-            
-        let cache = globals_dict.get_item("_embeddings_models_cache")
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to get models_cache from globals: {}", e)))?
-            .ok_or_else(|| EmbeddingError::PythonError("models_cache not found in globals".to_string()))?;
-            
-        let cache_dict = cache.downcast::<pyo3::types::PyDict>()
-            .map_err(|e| EmbeddingError::PythonError(format!("models_cache is not a dict: {}", e)))?;
-            
-        let model = if let Some(m) = cache_dict.get_item(model_name).map_err(|e| EmbeddingError::PythonError(format!("Failed to get model from cache: {}", e)))? {
-            m
-        } else {
-            let st_module = py.import("sentence_transformers")
-                .map_err(|e| EmbeddingError::PythonError(format!("Failed to import sentence_transformers: {}", e)))?;
-
-            let model_class = st_module.getattr("SentenceTransformer")
-                .map_err(|e| EmbeddingError::PythonError(format!("Failed to get SentenceTransformer class: {}", e)))?;
-
-            let m = model_class.call1((model_name,))
-                .map_err(|e| EmbeddingError::PythonError(format!("Failed to create model {}: {}", model_name, e)))?;
-            
-            cache_dict.set_item(model_name, &m)
-                .map_err(|e| EmbeddingError::PythonError(format!("Failed to cache model: {}", e)))?;
-            m
-        };
-
-        let py_texts = pyo3::types::PyList::new(py, &texts)
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to create Python list: {}", e)))?;
-
-        let embeddings = model.call_method1("encode", (py_texts,))
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to encode texts: {}", e)))?;
-
-        let embeddings_list = embeddings.call_method0("tolist")
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to convert embeddings: {}", e)))?;
-
-        embeddings_list.extract::<Vec<Vec<f32>>>()
-            .map_err(|e| EmbeddingError::PythonError(format!("Failed to extract embeddings: {}", e)))
-    }
-}
-
-#[async_trait]
-impl EmbeddingModel for SentenceTransformersModel {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn dimension(&self) -> usize {
-        self.dimension
-    }
-
-    async fn generate(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
-        if texts.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let model_name = self.name.clone();
-        let max_batch_size = self.max_batch_size;
-
-        let result = task::spawn_blocking(move || {
-            Python::with_gil(|py| {
-                Self::generate_with_python(py, &model_name, texts, max_batch_size)
-            })
-        })
-        .await
-        .map_err(|e| EmbeddingError::GenerationError(e.to_string()))??;
-
-        Ok(result)
-    }
-}
-
 /// Model type enum for configuration
 #[derive(Debug, Clone, Copy)]
 pub enum ModelType {
     Ollama,
-    SentenceTransformers,
 }
 
 impl ModelType {
-    pub fn from_config(use_ollama: bool) -> Self {
-        if use_ollama {
-            ModelType::Ollama
-        } else {
-            ModelType::SentenceTransformers
-        }
+    pub fn from_config() -> Self {
+        ModelType::Ollama
     }
 }

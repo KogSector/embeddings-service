@@ -28,13 +28,8 @@ impl ModelManager {
             return Ok(());
         }
 
-        let model: Arc<dyn EmbeddingModel> = if self.config.models.use_ollama {
-            tracing::info!("Loading Ollama model: {}", model_name);
-            Arc::new(crate::models::models::OllamaModel::new(model_name, &self.config)?)
-        } else {
-            tracing::info!("Loading SentenceTransformers model: {}", model_name);
-            Arc::new(crate::models::models::SentenceTransformersModel::new(model_name, &self.config)?)
-        };
+        tracing::info!("Loading Ollama model: {}", model_name);
+        let model: Arc<dyn EmbeddingModel> = Arc::new(crate::models::models::OllamaModel::new(model_name, &self.config)?);
 
         models.insert(model_name.to_string(), model);
         tracing::info!("Loaded model: {}", model_name);
