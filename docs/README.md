@@ -67,7 +67,7 @@ POST /api/v1/generate/batch
 }
 
 # Process chunks (HTTP alternative to gRPC)
-POST /api/v1/graphiti/chunks
+POST /api/v1/process/chunks
 {
   "chunks": [
     {
@@ -444,7 +444,7 @@ POST /api/v1/generate/batch
 }
 
 # Process chunks (HTTP alternative to gRPC)
-POST /api/v1/graphiti/chunks
+POST /api/v1/process/chunks
 {
   "chunks": [...],
   "model": "all-MiniLM-L6-v2"
