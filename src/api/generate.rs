@@ -73,7 +73,7 @@ pub async fn generate_embeddings(
     State(app_state): State<AppState>,
     Json(request): Json<GenerateRequest>,
 ) -> Result<Json<GenerateResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let model_name = request.model.unwrap_or_else(|| "sentence-transformers/all-MiniLM-L6-v2".to_string());
+    let model_name = request.model.unwrap_or_else(|| "nomic-embed-text:latest".to_string());
     let model_manager = &app_state.model_manager;
     
     let generator = BatchGenerator::new((**model_manager).clone());
@@ -118,7 +118,7 @@ pub async fn generate_batch_embeddings(
     State(app_state): State<AppState>,
     Json(request): Json<BatchGenerateRequest>,
 ) -> Result<Json<BatchGenerateResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let model_name = request.model.unwrap_or_else(|| "sentence-transformers/all-MiniLM-L6-v2".to_string());
+    let model_name = request.model.unwrap_or_else(|| "nomic-embed-text:latest".to_string());
     let model_manager = &app_state.model_manager;
     
     let generator = BatchGenerator::new((**model_manager).clone());
