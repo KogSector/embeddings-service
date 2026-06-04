@@ -39,3 +39,9 @@ htmlcov/
 *.log
 logs/
 embeddings/
+
+# Caches / Models
+.fastembed_cache/
+.huggingface/
+.cache/
+models/

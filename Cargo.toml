@@ -10,7 +10,7 @@ authors = ["ConFuse Team"]
 
 [lib]
 name = "embeddings_service"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 path = "src/lib.rs"
 
 [[bin]]
@@ -66,6 +66,7 @@ ndarray = "0.15"
 # Metrics
 prometheus = "0.13"
 fastembed = "5.15.0"
+ort = { version = "2.0.0-rc.12", features = ["load-dynamic"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
