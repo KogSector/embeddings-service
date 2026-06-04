@@ -122,13 +122,15 @@ impl EmbeddingModel for OllamaModel {
 }
 
 /// Model type enum for configuration
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelType {
     Ollama,
+    FastEmbed,
 }
 
 impl ModelType {
     pub fn from_config() -> Self {
-        ModelType::Ollama
+        // We now default to FastEmbed to save resources and avoid external HTTP calls
+        ModelType::FastEmbed
     }
 }
