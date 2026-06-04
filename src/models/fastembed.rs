@@ -1,7 +1,7 @@
 use crate::{Config, Result, EmbeddingError};
 use async_trait::async_trait;
 use fastembed::{TextEmbedding, InitOptions, EmbeddingModel as FastEmbedModelEnum};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use super::models::EmbeddingModel;
 
@@ -9,7 +9,7 @@ use super::models::EmbeddingModel;
 pub struct FastEmbedModel {
     name: String,
     dimension: usize,
-    model: Arc<TextEmbedding>,
+    model: Arc<Mutex<TextEmbedding>>,
 }
 
 impl FastEmbedModel {
@@ -30,7 +30,7 @@ impl FastEmbedModel {
         Ok(Self {
             name: model_name.to_string(),
             dimension,
-            model: Arc::new(model),
+            model: Arc::new(Mutex::new(model)),
         })
     }
 }
@@ -55,7 +55,8 @@ impl EmbeddingModel for FastEmbedModel {
         let model = Arc::clone(&self.model);
         
         let result = tokio::task::spawn_blocking(move || {
-            model.embed(texts, None)
+            let mut locked_model = model.lock().unwrap();
+            locked_model.embed(texts, None)
         })
         .await
         .map_err(|e| EmbeddingError::GenerationError(format!("Task execution failed: {}", e)))?

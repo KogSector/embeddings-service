@@ -6,7 +6,6 @@ use axum::{
     response::Json,
 };
 use serde::{Deserialize, Serialize};
-use crate::models::ModelManager;
 use crate::generators::BatchGenerator;
 use crate::AppState;
 
