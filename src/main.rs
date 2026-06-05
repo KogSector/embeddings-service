@@ -23,9 +23,8 @@ use embeddings_service::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load environment variables from .env.map (non-sensitive) and .env.secret (sensitive overrides)
-    dotenvy::from_filename_override(".env.map").ok();
-    dotenvy::from_filename_override(".env.secret").ok();
+    // Load environment variables from .env
+    dotenvy::from_filename_override(".env").ok();
     // Initialize tracing
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
