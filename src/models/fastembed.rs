@@ -14,9 +14,13 @@ pub struct FastEmbedModel {
 
 impl FastEmbedModel {
     pub fn new(model_name: &str, _config: &Config) -> Result<Self> {
+        // Normalize model name: strip `:latest` or similar tag suffixes
+        // so "nomic-embed-text:latest" resolves the same as "nomic-embed-text".
+        let normalized_name = model_name.split(':').next().unwrap_or(model_name);
+
         // Map model name to fastembed's EmbeddingModel enum.
         // FastEmbed supports many models out of the box.
-        let (fastembed_model, dimension) = match model_name {
+        let (fastembed_model, dimension) = match normalized_name {
             "nomic-embed-text" => (FastEmbedModelEnum::NomicEmbedTextV15, 768),
             "all-minilm" => (FastEmbedModelEnum::AllMiniLML6V2, 384),
             "bge-small-en-v1.5" => (FastEmbedModelEnum::BGESmallENV15, 384),
