@@ -36,11 +36,27 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting embeddings service on {}:{}", config.server.host, config.server.port);
 
     // Check Kafka health before starting (Kafka is required)
-    tracing::info!("Checking Kafka connectivity...");
+    tracing::info!("Checking Kafka connectivity with retry loop...");
     use confuse_common::events::EventProducer;
-    EventProducer::new(&config.kafka.bootstrap_servers)
-        .map_err(|e| anyhow::anyhow!("Kafka is required but not available: {}", e))?;
-    tracing::info!("Kafka health check passed");
+    let mut attempts = 0;
+    let max_attempts = 60; // 60 * 5s = 5 minutes timeout
+    
+    loop {
+        match EventProducer::new(&config.kafka.bootstrap_servers) {
+            Ok(_) => {
+                tracing::info!("Kafka health check passed");
+                break;
+            }
+            Err(e) => {
+                attempts += 1;
+                if attempts >= max_attempts {
+                    anyhow::bail!("Kafka is required but not available after {} attempts: {}", max_attempts, e);
+                }
+                tracing::warn!("Kafka health check failed, retrying in 5s... ({}/{})", attempts, max_attempts);
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
 
     // Initialize service components
     let model_manager = Arc::new(ModelManager::new(config.clone()));
