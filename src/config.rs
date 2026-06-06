@@ -67,7 +67,7 @@ impl Config {
         if let Ok(host) = std::env::var("HOST") {
             config.server.host = host;
         }
-        config.server.port = std::env::var("PORT")
+        config.server.port = std::env::var("APP_PORT")
             .unwrap_or_else(|_| "3001".to_string())
             .parse()
             .unwrap_or(3001);
