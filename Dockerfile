@@ -28,7 +28,7 @@ WORKDIR /app
 COPY embeddings-service/Cargo.toml embeddings-service/Cargo.lock* ./
 
 # Fix confuse-common path if present
-RUN sed -i 's|path = "../shared-middleware/rust/confuse-common"|path = "./shared-middleware/rust/confuse-common"|g' Cargo.toml && rm -f Cargo.lock
+RUN sed -i 's|path = "../confuse-common/rust"|path = "./confuse-common/rust"|g' Cargo.toml && rm -f Cargo.lock
 
 # Create dummy src for dependency caching
 RUN mkdir -p src/api src/core src/generators src/models src/infra && \
@@ -37,7 +37,7 @@ RUN mkdir -p src/api src/core src/generators src/models src/infra && \
     touch src/api/mod.rs src/core/mod.rs src/generators/mod.rs src/models/mod.rs src/infra/mod.rs
 
 # Copy shared library
-COPY shared-middleware ./shared-middleware
+COPY confuse-common ./confuse-common
 
 # Build dependencies (cached)
 RUN cargo build --release 2>/dev/null || true
