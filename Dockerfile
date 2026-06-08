@@ -27,8 +27,7 @@ WORKDIR /app
 # Copy Rust files
 COPY embeddings-service/Cargo.toml embeddings-service/Cargo.lock* ./
 
-# Fix confuse-common path if present
-RUN sed -i 's|path = "../confuse-common/rust"|path = "./confuse-common/rust"|g' Cargo.toml && rm -f Cargo.lock
+
 
 # Create dummy src for dependency caching
 RUN mkdir -p src/api src/core src/generators src/models src/infra && \
@@ -36,8 +35,7 @@ RUN mkdir -p src/api src/core src/generators src/models src/infra && \
     touch src/lib.rs && \
     touch src/api/mod.rs src/core/mod.rs src/generators/mod.rs src/models/mod.rs src/infra/mod.rs
 
-# Copy shared library
-COPY confuse-common ./confuse-common
+
 
 # Build dependencies (cached)
 RUN cargo build --release 2>/dev/null || true
