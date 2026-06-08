@@ -67,7 +67,7 @@ impl Config {
         if let Ok(host) = std::env::var("HOST") {
             config.server.host = host;
         }
-        config.server.port = std::env::var("APP_PORT")
+        config.server.port = std::env::var("EMBEDDINGS_SERVICE_PORT")
             .unwrap_or_else(|_| "3001".to_string())
             .parse()
             .unwrap_or(3001);
@@ -83,7 +83,7 @@ impl Config {
         if let Ok(bootstrap) = std::env::var("KAFKA_BOOTSTRAP_SERVERS") {
             config.kafka.bootstrap_servers = bootstrap;
         }
-        if let Ok(group) = std::env::var("KAFKA_GROUP_ID") {
+        if let Ok(group) = std::env::var("EMBEDDINGS_SERVICE_KAFKA_GROUP_ID") {
             config.kafka.group_id = group;
         }
         if let Ok(topic) = std::env::var("KAFKA_INPUT_TOPIC") {
