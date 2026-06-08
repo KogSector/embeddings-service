@@ -124,7 +124,7 @@ pub async fn zero_trust_middleware(mut request: Request, next: Next) -> Response
     if path.starts_with("/api/v1/") || path.starts_with("/v1/") {
         if let Some(user) = request
             .extensions()
-            .get::<super::axum_auth::AuthenticatedUser>()
+            .get::<super::auth::AuthenticatedUser>()
         {
             let workspace_header = request
                 .headers()

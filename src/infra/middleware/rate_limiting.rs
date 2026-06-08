@@ -138,7 +138,7 @@ fn get_client_id(request: &Request) -> String {
     // Try user ID from auth middleware
     if let Some(user) = request
         .extensions()
-        .get::<super::axum_auth::AuthenticatedUser>()
+        .get::<super::auth::AuthenticatedUser>()
     {
         return format!("user:{}", user.id);
     }

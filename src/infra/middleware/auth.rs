@@ -32,13 +32,12 @@ pub struct AuthenticatedUser {
 pub struct AxumAuthLayer {
     pub auth_service_url: String,
     pub auth_grpc_url: Option<String>,
-    pub auth_bypass_enabled: bool,
     http_client: reqwest::Client,
     grpc_client: Option<AuthClient<Channel>>,
 }
 
 impl AxumAuthLayer {
-    pub fn new(auth_service_url: String, auth_bypass_enabled: bool) -> Self {
+    pub fn new(auth_service_url: String) -> Self {
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
@@ -47,7 +46,6 @@ impl AxumAuthLayer {
         Self {
             auth_service_url,
             auth_grpc_url: None,
-            auth_bypass_enabled,
             http_client,
             grpc_client: None,
         }
@@ -57,7 +55,6 @@ impl AxumAuthLayer {
     pub async fn with_grpc(
         auth_service_url: String,
         auth_grpc_url: String,
-        auth_bypass_enabled: bool,
     ) -> Self {
         let http_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
@@ -79,7 +76,6 @@ impl AxumAuthLayer {
         Self {
             auth_service_url,
             auth_grpc_url: Some(auth_grpc_url),
-            auth_bypass_enabled,
             http_client,
             grpc_client,
         }
@@ -198,17 +194,6 @@ impl AxumAuthLayer {
     }
 }
 
-/// Demo user for auth bypass in development
-fn demo_user() -> AuthenticatedUser {
-    AuthenticatedUser {
-        id: "demo-user-001".to_string(),
-        email: "demo@confuse.dev".to_string(),
-        name: Some("Demo User".to_string()),
-        picture: None,
-        roles: vec!["user".to_string()],
-        workspace_id: Some("demo-workspace-001".to_string()),
-    }
-}
 
 /// Authentication middleware function for Axum
 
@@ -217,13 +202,6 @@ pub async fn axum_auth_middleware(
     mut request: Request,
     next: Next,
 ) -> Result<Response, Response> {
-    // Check for auth bypass (development only)
-    if auth_layer.auth_bypass_enabled {
-        tracing::debug!("Auth bypass enabled, using demo user");
-        request.extensions_mut().insert(demo_user());
-        return Ok(next.run(request).await);
-    }
-
     // Try to extract authorization
     let auth_header = request
         .headers()
@@ -304,12 +282,6 @@ pub async fn axum_optional_auth_middleware(
     mut request: Request,
     next: Next,
 ) -> Response {
-    // Check for auth bypass
-    if auth_layer.auth_bypass_enabled {
-        request.extensions_mut().insert(demo_user());
-        return next.run(request).await;
-    }
-
     // Try to extract and validate authorization
     let auth_header = request
         .headers()
