@@ -1,0 +1,99 @@
+//! Event Producer for ConFuse Platform
+
+
+// EventProducer requires the kafka feature (rdkafka → librdkafka → OpenSSL).
+// Gate the entire implementation so services that don't need Kafka can compile
+// without a system OpenSSL / CMake installation.
+
+mod kafka_impl {
+    use rdkafka::producer::{FutureProducer, FutureRecord};
+    use rdkafka::ClientConfig;
+    use serde::Serialize;
+    use anyhow::Result;
+
+    /// Kafka event producer
+    pub struct EventProducer {
+        producer: FutureProducer,
+    }
+
+    impl EventProducer {
+        pub fn new(bootstrap_servers: &str) -> Result<Self> {
+            let enable_idempotence = std::env::var("KAFKA_ENABLE_IDEMPOTENCE")
+                .unwrap_or_else(|_| "true".to_string())
+                .to_lowercase() == "true";
+
+            let producer: FutureProducer = ClientConfig::new()
+                .set("bootstrap.servers", bootstrap_servers)
+                .set("message.max.bytes", "1000000")
+                .set("delivery.timeout.ms", "5000")
+                .set("enable.idempotence", enable_idempotence.to_string())
+                .create()?;
+
+            Ok(Self { producer })
+        }
+        pub async fn publish<T: Serialize>(&self, topic: &str, event: &T) -> Result<()> {
+            let payload = serde_json::to_string(event)?;
+            let record = FutureRecord::to(topic)
+                .payload(&payload)
+                .key("event");
+
+            match self.producer.send(record, std::time::Duration::from_secs(0)).await {
+                Ok((partition, offset)) => {
+                    tracing::info!("Event sent to partition {} at offset {}", partition, offset);
+                    Ok(())
+                }
+                Err((e, _)) => {
+                    tracing::error!("Failed to send event: {}", e);
+                    Err(anyhow::anyhow!("Failed to send event: {}", e))
+                }
+            }
+        }
+
+        /// Publish with retries and optional DLQ fallback.
+        pub async fn publish_with_retry<T: Serialize + std::fmt::Debug>(
+            &self,
+            topic: &str,
+            event: &T,
+            retries: usize,
+            dlq_topic: Option<&str>,
+        ) -> Result<()> {
+            use tokio::time::{sleep, Duration};
+
+            let mut last_err: Option<anyhow::Error> = None;
+
+            for attempt in 0..retries {
+                match self.publish(topic, event).await {
+                    Ok(_) => return Ok(()),
+                    Err(e) => {
+                        tracing::warn!("Publish attempt {} failed for topic {}: {}", attempt + 1, topic, e);
+                        last_err = Some(e);
+                        let delay = Duration::from_millis((2u64.pow(attempt as u32)) * 500);
+                        sleep(delay).await;
+                    }
+                }
+            }
+
+            tracing::error!("Failed to publish after {} attempts", retries);
+
+            if let Some(dlq) = dlq_topic {
+                // Build failure envelope
+                let envelope = serde_json::json!({
+                    "failedTopic": topic,
+                    "failedAt": chrono::Utc::now().timestamp_millis(),
+                    "error": format!("{:?}", last_err),
+                    "event": format!("{:?}", event),
+                });
+                if let Err(e) = self.publish(dlq, &envelope).await {
+                    tracing::error!("Failed to publish failure envelope to DLQ {}: {}", dlq, e);
+                } else {
+                    tracing::info!("Published failure envelope to DLQ {}", dlq);
+                }
+            }
+
+            Err(last_err.unwrap_or_else(|| anyhow::anyhow!("publish failed without error")))
+        }
+    }
+}
+
+
+pub use kafka_impl::EventProducer;

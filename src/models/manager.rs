@@ -29,9 +29,9 @@ impl ModelManager {
         }
 
         tracing::info!("Loading FastEmbed model: {}", model_name);
-        let model: Arc<dyn EmbeddingModel> = match crate::models::ModelType::from_config() {
-            crate::models::ModelType::FastEmbed => Arc::new(crate::models::fastembed::FastEmbedModel::new(model_name, &self.config)?),
-            crate::models::ModelType::Ollama => Arc::new(crate::models::OllamaModel::new(model_name, &self.config)?),
+        let model: Arc<dyn EmbeddingModel> = match crate::models::models::ModelType::from_config() {
+            crate::models::models::ModelType::FastEmbed => Arc::new(crate::models::fastembed::FastEmbedModel::new(model_name, &self.config)?),
+            crate::models::models::ModelType::Ollama => Arc::new(crate::models::models::OllamaModel::new(model_name, &self.config)?),
         };
 
         models.insert(model_name.to_string(), model);

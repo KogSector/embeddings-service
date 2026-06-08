@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests {
     use embeddings_service::api::generate::{GenerateRequest, GenerateResponse, BatchGenerateRequest, BatchGenerateResponse, ErrorResponse};
-    use embeddings_service::core::Config;
+    use embeddings_service::Config;
     use serde_json::json;
 
     #[tokio::test]
@@ -16,6 +16,7 @@ mod tests {
             "source_id": "test-source",
             "chunk_index": 0,
             "metadata": {"key": "value"}
+        });
         
         let request: GenerateRequest = serde_json::from_value(json_data).unwrap();
         assert_eq!(request.text, "Test text");

@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Check Kafka health before starting (Kafka is required)
     tracing::info!("Checking Kafka connectivity with retry loop...");
-    use confuse_common::events::EventProducer;
+    use embeddings_service::infra::events::EventProducer;
     let mut attempts = 0;
     let max_attempts = 60; // 60 * 5s = 5 minutes timeout
     
@@ -86,36 +86,35 @@ async fn main() -> anyhow::Result<()> {
     // -- Shared Middleware (from confuse-common) --
     let auth_service_url = std::env::var("AUTH_MIDDLEWARE_URL")
         .unwrap_or_else(|_| "http://auth-middleware:3010".to_string());
-    let auth_grpc_url = std::env::var("AUTH_GRPC_URL")
-        .unwrap_or_else(|_| "http://localhost:50058".to_string());
+    // -- Shared Middleware (from crate::infra) --
     let auth_bypass = std::env::var("AUTH_BYPASS_ENABLED")
         .unwrap_or_else(|_| "false".to_string())
         .parse::<bool>()
         .unwrap_or(false);
-    let auth_layer = confuse_common::middleware::AxumAuthLayer::with_grpc(
+    let auth_grpc_url = std::env::var("AUTH_GRPC_URL").unwrap_or_default();
+    
+    let auth_layer = embeddings_service::infra::middleware::AxumAuthLayer::with_grpc(
         auth_service_url,
         auth_grpc_url,
         auth_bypass,
     ).await;
 
-    let rate_limit = confuse_common::middleware::AxumRateLimitConfig::default_for_service(20);
+    let rate_limit = embeddings_service::infra::middleware::AxumRateLimitConfig::default_for_service(20);
 
-    // Build protected routes (behind auth)
-    let protected_routes = Router::new()
-        // Generation endpoints
-        .route("/api/v1/generate", post(generate_embeddings))
-        .route("/api/v1/generate/batch", post(generate_batch_embeddings))
-        .with_state(app_state.clone())
-        .layer(axum::middleware::from_fn_with_state(rate_limit.clone(), confuse_common::middleware::axum_rate_limit_middleware))
-        .layer(axum::middleware::from_fn_with_state(auth_layer.clone(), confuse_common::middleware::axum_auth_middleware));
-
-    // Build overall app router
     let app = Router::new()
-        // Health endpoint (no auth required)
-        .route("/health", get(health_check))
-        .merge(protected_routes)
-        .layer(axum::middleware::from_fn(confuse_common::middleware::security_headers_middleware))
-        .layer(axum::middleware::from_fn(confuse_common::middleware::zero_trust_middleware))
+        .route("/api/v1/embeddings", post(embeddings_service::api::generate_embeddings))
+        .route("/api/v1/generate", post(embeddings_service::api::generate_batch_embeddings))
+        .with_state(app_state.clone())
+        // Apply global middlewares in reverse order (bottom runs first)
+        .layer(axum::middleware::from_fn_with_state(rate_limit.clone(), embeddings_service::infra::middleware::axum_rate_limit_middleware))
+        .layer(axum::middleware::from_fn_with_state(auth_layer.clone(), embeddings_service::infra::middleware::axum_auth_middleware));
+
+    let app = Router::new()
+        .route("/health", get(embeddings_service::api::health_check))
+        .nest("/", app)
+        // Global security headers
+        .layer(axum::middleware::from_fn(embeddings_service::infra::middleware::security_headers_middleware))
+        .layer(axum::middleware::from_fn(embeddings_service::infra::middleware::zero_trust_middleware))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

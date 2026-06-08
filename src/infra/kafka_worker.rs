@@ -1,5 +1,5 @@
 use anyhow::Result;
-use confuse_common::events::{
+use crate::infra::events::{
     EventConsumer, EventProducer, SimplifiedChunkRawEvent,
     SimplifiedEmbeddingGeneratedEvent, SimplifiedEmbedding,
 };
