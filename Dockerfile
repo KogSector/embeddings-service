@@ -7,7 +7,7 @@
 # ==============================================================================
 
 # Stage 1: Rust builder with latest stable Rust
-FROM rust:1.92.0-slim AS rust-builder
+FROM rust:1.80-slim AS rust-builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -50,7 +50,7 @@ COPY embeddings-service/src/ ./src/
 RUN cargo build --release --features kafka
 
 # Stage 2: Python dependencies for ML models
-FROM python:3.14-slim AS python-builder
+FROM python:3.12-slim AS python-builder
 
 # Install system dependencies for ML packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -67,7 +67,7 @@ RUN pip install --no-cache-dir \
     structlog>=24.1.0
 
 # Stage 3: Final runtime image
-FROM python:3.14-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -79,7 +79,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages
-COPY --from=python-builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=python-builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=python-builder /usr/local/bin /usr/local/bin
 
 # Copy Rust binary
