@@ -34,66 +34,50 @@ pub struct ModelConfig {
     pub ollama_url: Option<String>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig {
-                host: "0.0.0.0".to_string(),
-                port: 3001,
-                workers: 4,
-            },
-            models: ModelConfig {
-                default_model: "nomic-embed-text".to_string(),
-                max_batch_size: 32,
-                timeout: Duration::from_secs(30),
-                ollama_url: None,
-            },
-            kafka: KafkaConfig {
-                bootstrap_servers: "localhost:9092".to_string(),
-                group_id: "embeddings-service".to_string(),
-                input_topic: "chunks.raw".to_string(),
-                output_topic: "embedding.generated".to_string(),
-                enabled: false,
-            },
-        }
-    }
-}
-
 impl Config {
     pub fn from_env() -> crate::Result<Self> {
-        let mut config = Self::default();
-
-        // Override with environment variables
-        if let Ok(host) = std::env::var("HOST") {
-            config.server.host = host;
-        }
-        config.server.port = std::env::var("EMBEDDINGS_SERVICE_PORT")
-            .unwrap_or_else(|_| "3001".to_string())
-            .parse()
-            .unwrap_or(3001);
-        if let Ok(default_model) = std::env::var("DEFAULT_EMBEDDING_MODEL") {
-            config.models.default_model = default_model;
-        }
-        if let Ok(batch_size) = std::env::var("MAX_BATCH_SIZE") {
-            config.models.max_batch_size = batch_size.parse().unwrap_or(32);
-        }
-        config.models.ollama_url = std::env::var("OLLAMA_URL").ok();
-
-        // Kafka
-        if let Ok(bootstrap) = std::env::var("KAFKA_BOOTSTRAP_SERVERS") {
-            config.kafka.bootstrap_servers = bootstrap;
-        }
-        if let Ok(group) = std::env::var("EMBEDDINGS_SERVICE_KAFKA_GROUP_ID") {
-            config.kafka.group_id = group;
-        }
-        if let Ok(topic) = std::env::var("KAFKA_INPUT_TOPIC") {
-            config.kafka.input_topic = topic;
-        }
-        if let Ok(topic) = std::env::var("KAFKA_OUTPUT_TOPIC") {
-            config.kafka.output_topic = topic;
-        }
-        config.kafka.enabled = true; // Kafka is always required
-
-        Ok(config)
+        Ok(Self {
+            server: ServerConfig {
+                host: std::env::var("HOST")
+                    .map_err(|_| "Missing required env var: HOST")?,
+                port: std::env::var("EMBEDDINGS_SERVICE_PORT")
+                    .map_err(|_| "Missing required env var: EMBEDDINGS_SERVICE_PORT")?
+                    .parse()
+                    .map_err(|_| "Invalid EMBEDDINGS_SERVICE_PORT")?,
+                workers: std::env::var("WORKERS")
+                    .map_err(|_| "Missing required env var: WORKERS")?
+                    .parse()
+                    .map_err(|_| "Invalid WORKERS")?,
+            },
+            models: ModelConfig {
+                default_model: std::env::var("DEFAULT_EMBEDDING_MODEL")
+                    .map_err(|_| "Missing required env var: DEFAULT_EMBEDDING_MODEL")?,
+                max_batch_size: std::env::var("MAX_BATCH_SIZE")
+                    .map_err(|_| "Missing required env var: MAX_BATCH_SIZE")?
+                    .parse()
+                    .map_err(|_| "Invalid MAX_BATCH_SIZE")?,
+                timeout: Duration::from_secs(
+                    std::env::var("MODEL_TIMEOUT_SECS")
+                        .map_err(|_| "Missing required env var: MODEL_TIMEOUT_SECS")?
+                        .parse()
+                        .map_err(|_| "Invalid MODEL_TIMEOUT_SECS")?
+                ),
+                ollama_url: std::env::var("OLLAMA_URL").ok(),
+            },
+            kafka: KafkaConfig {
+                bootstrap_servers: std::env::var("KAFKA_BOOTSTRAP_SERVERS")
+                    .map_err(|_| "Missing required env var: KAFKA_BOOTSTRAP_SERVERS")?,
+                group_id: std::env::var("EMBEDDINGS_SERVICE_KAFKA_GROUP_ID")
+                    .map_err(|_| "Missing required env var: EMBEDDINGS_SERVICE_KAFKA_GROUP_ID")?,
+                input_topic: std::env::var("KAFKA_INPUT_TOPIC")
+                    .map_err(|_| "Missing required env var: KAFKA_INPUT_TOPIC")?,
+                output_topic: std::env::var("KAFKA_OUTPUT_TOPIC")
+                    .map_err(|_| "Missing required env var: KAFKA_OUTPUT_TOPIC")?,
+                enabled: std::env::var("KAFKA_ENABLED")
+                    .map_err(|_| "Missing required env var: KAFKA_ENABLED")?
+                    .parse()
+                    .map_err(|_| "Invalid KAFKA_ENABLED")?,
+            },
+        })
     }
 }
