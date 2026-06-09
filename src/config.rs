@@ -39,44 +39,44 @@ impl Config {
         Ok(Self {
             server: ServerConfig {
                 host: std::env::var("HOST")
-                    .map_err(|_| "Missing required env var: HOST")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: HOST".to_string()))?,
                 port: std::env::var("EMBEDDINGS_SERVICE_PORT")
-                    .map_err(|_| "Missing required env var: EMBEDDINGS_SERVICE_PORT")?
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: EMBEDDINGS_SERVICE_PORT".to_string()))?
                     .parse()
-                    .map_err(|_| "Invalid EMBEDDINGS_SERVICE_PORT")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid EMBEDDINGS_SERVICE_PORT".to_string()))?,
                 workers: std::env::var("WORKERS")
-                    .map_err(|_| "Missing required env var: WORKERS")?
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: WORKERS".to_string()))?
                     .parse()
-                    .map_err(|_| "Invalid WORKERS")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid WORKERS".to_string()))?,
             },
             models: ModelConfig {
                 default_model: std::env::var("DEFAULT_EMBEDDING_MODEL")
-                    .map_err(|_| "Missing required env var: DEFAULT_EMBEDDING_MODEL")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: DEFAULT_EMBEDDING_MODEL".to_string()))?,
                 max_batch_size: std::env::var("MAX_BATCH_SIZE")
-                    .map_err(|_| "Missing required env var: MAX_BATCH_SIZE")?
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: MAX_BATCH_SIZE".to_string()))?
                     .parse()
-                    .map_err(|_| "Invalid MAX_BATCH_SIZE")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid MAX_BATCH_SIZE".to_string()))?,
                 timeout: Duration::from_secs(
                     std::env::var("MODEL_TIMEOUT_SECS")
-                        .map_err(|_| "Missing required env var: MODEL_TIMEOUT_SECS")?
+                        .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: MODEL_TIMEOUT_SECS".to_string()))?
                         .parse()
-                        .map_err(|_| "Invalid MODEL_TIMEOUT_SECS")?
+                        .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid MODEL_TIMEOUT_SECS".to_string()))?
                 ),
                 ollama_url: std::env::var("OLLAMA_URL").ok(),
             },
             kafka: KafkaConfig {
                 bootstrap_servers: std::env::var("KAFKA_BOOTSTRAP_SERVERS")
-                    .map_err(|_| "Missing required env var: KAFKA_BOOTSTRAP_SERVERS")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: KAFKA_BOOTSTRAP_SERVERS".to_string()))?,
                 group_id: std::env::var("EMBEDDINGS_SERVICE_KAFKA_GROUP_ID")
-                    .map_err(|_| "Missing required env var: EMBEDDINGS_SERVICE_KAFKA_GROUP_ID")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: EMBEDDINGS_SERVICE_KAFKA_GROUP_ID".to_string()))?,
                 input_topic: std::env::var("KAFKA_INPUT_TOPIC")
-                    .map_err(|_| "Missing required env var: KAFKA_INPUT_TOPIC")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: KAFKA_INPUT_TOPIC".to_string()))?,
                 output_topic: std::env::var("KAFKA_OUTPUT_TOPIC")
-                    .map_err(|_| "Missing required env var: KAFKA_OUTPUT_TOPIC")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: KAFKA_OUTPUT_TOPIC".to_string()))?,
                 enabled: std::env::var("KAFKA_ENABLED")
-                    .map_err(|_| "Missing required env var: KAFKA_ENABLED")?
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: KAFKA_ENABLED".to_string()))?
                     .parse()
-                    .map_err(|_| "Invalid KAFKA_ENABLED")?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid KAFKA_ENABLED".to_string()))?,
             },
         })
     }
