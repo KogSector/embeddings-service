@@ -87,7 +87,7 @@ pub async fn zero_trust_middleware(mut request: Request, next: Next) -> Response
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
                     .as_secs();
-                let drift = if now > ts { now - ts } else { ts - now };
+                let drift = now.abs_diff(ts);
                 if drift > 300 {
                     tracing::warn!(
                         correlation_id = %correlation_id,

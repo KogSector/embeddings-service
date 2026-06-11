@@ -46,6 +46,7 @@ impl std::fmt::Display for EpisodeSourceType {
 /// Granularity / semantic type of the chunk.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum EpisodeChunkType {
     // Codebase types
     Function,
@@ -74,14 +75,10 @@ pub enum EpisodeChunkType {
     MessageTurn,
     // Generic
     Mixed,
+    #[default]
     Raw,
 }
 
-impl Default for EpisodeChunkType {
-    fn default() -> Self {
-        Self::Raw
-    }
-}
 
 // ── Sub-models ───────────────────────────────────────────────────────────────
 

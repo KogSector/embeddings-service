@@ -175,7 +175,7 @@ fn check_rate_limit(
     let window_start = now - config.window_secs;
     let key = format!("ratelimit:{}:{}", client_id, path.replace('/', "_"));
 
-    let mut entry = config.counters.entry(key).or_insert_with(Vec::new);
+    let mut entry = config.counters.entry(key).or_default();
 
     // Remove old entries outside the window
     entry.retain(|&ts| ts > window_start);

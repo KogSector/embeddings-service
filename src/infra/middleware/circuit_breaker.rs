@@ -120,8 +120,8 @@ impl CircuitBreakerRegistry {
         let successes = breaker.consecutive_successes.fetch_add(1, Ordering::Relaxed) + 1;
 
         let opened = breaker.opened_at.load(Ordering::Relaxed);
-        if opened > 0 {
-            if successes >= self.config.half_open_successes {
+        if opened > 0
+            && successes >= self.config.half_open_successes {
                 breaker.opened_at.store(0, Ordering::Relaxed);
                 breaker.consecutive_successes.store(0, Ordering::Relaxed);
                 breaker.half_open_probes.store(0, Ordering::Relaxed);
@@ -130,7 +130,6 @@ impl CircuitBreakerRegistry {
                     "Circuit breaker CLOSED — service recovered"
                 );
             }
-        }
     }
 
     /// Record a failed request

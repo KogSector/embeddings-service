@@ -9,23 +9,13 @@ use crate::models::ModelManager;
 use crate::Config;
 
 pub struct KafkaWorker {
-    consumer: EventConsumer,
-    producer: EventProducer,
     model_manager: Arc<ModelManager>,
     config: Config,
 }
 
 impl KafkaWorker {
     pub fn new(config: Config, model_manager: Arc<ModelManager>) -> Result<Self> {
-        let consumer = EventConsumer::new(
-            &config.kafka.bootstrap_servers,
-            &config.kafka.group_id,
-        )?;
-        let producer = EventProducer::new(&config.kafka.bootstrap_servers)?;
-
         Ok(Self {
-            consumer,
-            producer,
             model_manager,
             config,
         })

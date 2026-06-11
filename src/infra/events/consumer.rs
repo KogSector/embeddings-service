@@ -21,7 +21,7 @@ impl EventConsumer {
         let consumer: StreamConsumer = ClientConfig::new()
             .set("bootstrap.servers", bootstrap_servers)
             .set("group.id", group_id)
-            .set("client.id", &format!("{}-consumer", group_id))
+            .set("client.id", format!("{}-consumer", group_id))
             .set("enable.auto.commit", "true")
             .set("auto.offset.reset", "earliest")
             .set("enable.auto.offset.store", "false")

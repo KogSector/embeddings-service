@@ -15,7 +15,6 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use embeddings_service::{
-    api::{generate_embeddings, generate_batch_embeddings, health_check},
     Config,
     models::ModelManager,
 };
