@@ -25,7 +25,7 @@ WORKDIR /app
 
 # Copy Rust files
 # Copy Rust files
-COPY embeddings-service/Cargo.toml embeddings-service/Cargo.lock* ./
+COPY Cargo.toml Cargo.lock* ./
 
 
 
@@ -44,7 +44,7 @@ RUN cargo build --release 2>/dev/null || true
 RUN rm -rf src/*
 
 # Copy actual source
-COPY embeddings-service/src/ ./src/
+COPY src/ ./src/
 
 # Build the application
 RUN cargo build --release --features kafka
@@ -86,7 +86,7 @@ COPY --from=python-builder /usr/local/bin /usr/local/bin
 COPY --from=rust-builder /app/target/release/embeddings-service /usr/local/bin/
 
 # Copy application source for Python modules
-COPY embeddings-service/src/ ./src/
+COPY src/ ./src/
 
 # Set Python path
 ENV PYTHONPATH=/app/src
@@ -96,9 +96,9 @@ WORKDIR /app
 RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Health check optimized for Azure Container Apps
+# Health check optimized for Cloud Run
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:3011/health || exit 1
+    CMD curl -f http://localhost:${PORT:-3011}/health || exit 1
 
 # Expose port
 EXPOSE 3011
