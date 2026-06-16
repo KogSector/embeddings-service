@@ -75,7 +75,7 @@ impl KafkaWorker {
                             let model_name = model_manager.get_default_model_name().to_string();
 
                             embeddings.push(SimplifiedEmbedding {
-                                chunk_id: chunk.chunk_id.clone(),
+                                id: chunk.id.clone(),
                                 file_id: chunk.file_id.clone(),
                                 chunk_type: chunk.chunk_type.clone(),
                                 language: chunk.language.clone(),
@@ -85,7 +85,7 @@ impl KafkaWorker {
                             });
                         }
                         Err(e) => {
-                            error!("Failed to generate embedding for chunk {}: {}", chunk.chunk_id, e);
+                            error!("Failed to generate embedding for chunk {}: {}", chunk.id, e);
                         }
                     }
                 }
