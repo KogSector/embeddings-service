@@ -1,9 +1,4 @@
-
-pub mod auth;
-pub mod mcp;
-
 // Original embeddings-service modules
-pub mod fastembed;
 pub mod manager;
 pub mod models;
 

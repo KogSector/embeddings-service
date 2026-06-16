@@ -3,7 +3,6 @@
 //! A high-performance embedding generation service
 //! for the ConFuse platform (generate-only, Kafka-based).
 
-pub mod api;
 pub mod config;
 pub mod error;
 pub mod generators;
@@ -30,11 +29,6 @@ pub use crate::error::{EmbeddingError, Result};
 pub use crate::models::{ModelManager, EmbeddingModel};
 
 
-// Application state for Axum
-#[derive(Clone)]
-pub struct AppState {
-    pub model_manager: Arc<ModelManager>,
-}
 
 pub struct EmbeddingsService {
     pub config: Config,

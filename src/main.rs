@@ -1,17 +1,8 @@
 //! Main entry point for the embeddings service.
 //! Provides REST endpoints for embedding generation via Kafka communication with unified-processor.
 
-use axum::{
-    routing::{get, post},
-    Router,
-};
-use std::net::SocketAddr;
+
 use std::sync::Arc;
-use tower::ServiceBuilder;
-use tower_http::{
-    cors::CorsLayer,
-    trace::TraceLayer,
-};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use embeddings_service::{
@@ -66,61 +57,15 @@ async fn main() -> anyhow::Result<()> {
     model_manager.ensure_model_loaded(&config.models.default_model)
         .await?;
 
-    let app_state = embeddings_service::AppState {
-        model_manager: model_manager.clone(),
-    };
-
-    // Initialize and start Kafka worker (required for service to function)
+    // Initialize Kafka worker
     let kafka_worker = embeddings_service::infra::kafka_worker::KafkaWorker::new(
         config.clone(),
         model_manager.clone(),
     )?;
 
-    tokio::spawn(async move {
-        if let Err(e) = kafka_worker.start().await {
-            tracing::error!("Kafka worker failed: {}", e);
-        }
-    });
-
-    // -- Shared Middleware (from confuse-common) --
-    let auth_service_url = std::env::var("AUTH_MIDDLEWARE_URL")
-        .unwrap_or_else(|_| "http://auth-middleware:3010".to_string());
-    let auth_grpc_url = std::env::var("AUTH_GRPC_URL").unwrap_or_default();
-
-    let auth_layer = embeddings_service::infra::middleware::AxumAuthLayer::with_grpc(
-        auth_service_url,
-        auth_grpc_url,
-    ).await;
-
-    let rate_limit = embeddings_service::infra::middleware::AxumRateLimitConfig::default_for_service(20);
-
-    let app = Router::new()
-        .route("/api/v1/embeddings", post(embeddings_service::api::generate_embeddings))
-        .route("/api/v1/generate", post(embeddings_service::api::generate_batch_embeddings))
-        .with_state(app_state.clone())
-        // Apply global middlewares in reverse order (bottom runs first)
-        .layer(axum::middleware::from_fn_with_state(rate_limit.clone(), embeddings_service::infra::middleware::axum_rate_limit_middleware))
-        .layer(axum::middleware::from_fn_with_state(auth_layer.clone(), embeddings_service::infra::middleware::axum_auth_middleware));
-
-    let app = Router::new()
-        .route("/health", get(embeddings_service::api::health_check))
-        .nest("/", app)
-        // Global security headers
-        .layer(axum::middleware::from_fn(embeddings_service::infra::middleware::security_headers_middleware))
-        .layer(axum::middleware::from_fn(embeddings_service::infra::middleware::zero_trust_middleware))
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .layer(CorsLayer::permissive())
-        );
-
-
-    // Start HTTP server
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
-    tracing::info!("Starting HTTP server on {}", addr);
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    // Start Kafka worker directly
+    tracing::info!("Starting Kafka worker...");
+    kafka_worker.start().await?;
 
     Ok(())
 }
