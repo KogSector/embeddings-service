@@ -1,18 +1,12 @@
-//! ConFuse Events - Shared Event Schemas
-
-pub mod events;
-pub mod episode;
-pub mod topics;
-
-
-pub mod producer;
+//! Event Infrastructure for ConFuse Platform
 
 pub mod consumer;
+pub mod events;
+pub mod producer;
+pub mod topics;
 
-pub use events::*;
-pub use topics::Topics;
-
-
-pub use producer::*;
-
+// Re-export common types for easier access
 pub use consumer::*;
+pub use producer::*;
+pub use events::*;
+pub use topics::*;
