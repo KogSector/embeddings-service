@@ -22,12 +22,30 @@ mod kafka_impl {
                 .unwrap_or_else(|_| "true".to_string())
                 .to_lowercase() == "true";
 
-            let producer: FutureProducer = ClientConfig::new()
+            let mut config = ClientConfig::new();
+            config
                 .set("bootstrap.servers", bootstrap_servers)
                 .set("message.max.bytes", "1000000")
                 .set("delivery.timeout.ms", "5000")
-                .set("enable.idempotence", enable_idempotence.to_string())
-                .create()?;
+                .set("enable.idempotence", enable_idempotence.to_string());
+
+            if let Ok(protocol) = std::env::var("KAFKA_SECURITY_PROTOCOL") {
+                config.set("security.protocol", protocol);
+            }
+            if let Ok(mechanism) = std::env::var("KAFKA_SASL_MECHANISM") {
+                config.set("sasl.mechanism", mechanism);
+            }
+            if let Ok(username) = std::env::var("KAFKA_SASL_USERNAME").or_else(|_| std::env::var("CONFLUENT_API_KEY")) {
+                config.set("sasl.username", username);
+            }
+            if let Ok(password) = std::env::var("KAFKA_SASL_PASSWORD").or_else(|_| std::env::var("CONFLUENT_API_SECRET")) {
+                config.set("sasl.password", password);
+            }
+            if let Ok(ca_location) = std::env::var("KAFKA_SSL_CA_LOCATION") {
+                config.set("ssl.ca.location", ca_location);
+            }
+
+            let producer: FutureProducer = config.create()?;
 
             Ok(Self { producer })
         }

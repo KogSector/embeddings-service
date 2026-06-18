@@ -18,7 +18,8 @@ pub struct EventConsumer {
 impl EventConsumer {
     /// Create a new event consumer with specified consumer group
     pub fn new(bootstrap_servers: &str, group_id: &str) -> Result<Self> {
-        let consumer: StreamConsumer = ClientConfig::new()
+        let mut config = ClientConfig::new();
+        config
             .set("bootstrap.servers", bootstrap_servers)
             .set("group.id", group_id)
             .set("client.id", format!("{}-consumer", group_id))
@@ -28,8 +29,25 @@ impl EventConsumer {
             .set("session.timeout.ms", "10000")
             .set("heartbeat.interval.ms", "3000")
             .set("max.poll.interval.ms", "300000")
-            .set("auto.commit.interval.ms", "5000")
-            .create()?;
+            .set("auto.commit.interval.ms", "5000");
+
+        if let Ok(protocol) = std::env::var("KAFKA_SECURITY_PROTOCOL") {
+            config.set("security.protocol", protocol);
+        }
+        if let Ok(mechanism) = std::env::var("KAFKA_SASL_MECHANISM") {
+            config.set("sasl.mechanism", mechanism);
+        }
+        if let Ok(username) = std::env::var("KAFKA_SASL_USERNAME").or_else(|_| std::env::var("CONFLUENT_API_KEY")) {
+            config.set("sasl.username", username);
+        }
+        if let Ok(password) = std::env::var("KAFKA_SASL_PASSWORD").or_else(|_| std::env::var("CONFLUENT_API_SECRET")) {
+            config.set("sasl.password", password);
+        }
+        if let Ok(ca_location) = std::env::var("KAFKA_SSL_CA_LOCATION") {
+            config.set("ssl.ca.location", ca_location);
+        }
+
+        let consumer: StreamConsumer = config.create()?;
 
         info!("Kafka event consumer initialized with group: {}", group_id);
 
