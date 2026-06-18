@@ -11,6 +11,7 @@ use tokio::sync::RwLock;
 pub struct ModelManager {
     models: Arc<RwLock<HashMap<String, Arc<dyn EmbeddingModel>>>>,
     config: Config,
+    concurrency_limiter: Arc<tokio::sync::Semaphore>,
 }
 
 impl ModelManager {
@@ -18,6 +19,7 @@ impl ModelManager {
         Self {
             models: Arc::new(RwLock::new(HashMap::new())),
             config,
+            concurrency_limiter: Arc::new(tokio::sync::Semaphore::new(16)), // Allow max 16 concurrent embedding generations
         }
     }
 
@@ -78,6 +80,10 @@ impl ModelManager {
     pub async fn generate_embeddings(&self, text: &str, model_name: Option<&str>) -> Result<Vec<f32>> {
         let name = model_name.unwrap_or(&self.config.models.default_model);
         let model = self.ensure_model_loaded(name).await?;
+        
+        let _permit = self.concurrency_limiter.acquire().await
+            .map_err(|e| EmbeddingError::GenerationError(format!("Concurrency limiter error: {}", e)))?;
+            
         let embeddings = model.generate(vec![text.to_string()]).await?;
         
         embeddings.into_iter().next().ok_or_else(|| EmbeddingError::GenerationError("No embedding returned from model".to_string()))
