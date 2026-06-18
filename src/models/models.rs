@@ -59,11 +59,49 @@ impl OllamaModel {
         }
     }
 
+    /// Returns the maximum character length we allow for the given model.
+    /// Ollama embedding models typically have a 2048-token default context.
+    /// Code tokenizes densely (~2-3 chars/token), so we use conservative limits.
+    fn get_max_input_chars(model_name: &str) -> usize {
+        match model_name {
+            "nomic-embed-text" => 6000,      // 2048 tokens × ~3 chars/token
+            "mxbai-embed-large" => 1500,     // 512 tokens × ~3 chars/token
+            "all-minilm" => 750,             // 256 tokens × ~3 chars/token
+            "snowflake-arctic-embed" => 1500, // 512 tokens × ~3 chars/token
+            _ => 4000,
+        }
+    }
+
     async fn generate_single(&self, text: &str) -> Result<Vec<f32>> {
+        // Truncate text that exceeds the model's context window
+        let max_chars = Self::get_max_input_chars(&self.name);
+        let input = if text.len() > max_chars {
+            tracing::warn!(
+                "Truncating input from {} to {} chars for model {}",
+                text.len(),
+                max_chars,
+                self.name
+            );
+            // Find a safe char boundary to truncate at
+            let mut end = max_chars;
+            while !text.is_char_boundary(end) && end > 0 {
+                end -= 1;
+            }
+            &text[..end]
+        } else {
+            text
+        };
+
+        #[derive(Debug, Serialize)]
+        struct Options {
+            num_ctx: usize,
+        }
+
         #[derive(Debug, Serialize)]
         struct Request {
             model: String,
             prompt: String,
+            options: Options,
         }
 
         #[derive(Debug, Deserialize)]
@@ -73,7 +111,10 @@ impl OllamaModel {
 
         let request = Request {
             model: self.name.clone(),
-            prompt: text.to_string(),
+            prompt: input.to_string(),
+            options: Options {
+                num_ctx: 8192,
+            },
         };
 
         let response = self.client
