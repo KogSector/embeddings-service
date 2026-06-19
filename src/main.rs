@@ -36,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
         match EventProducer::new(&config.kafka.bootstrap_servers) {
             Ok(_) => {
                 tracing::info!("Kafka health check passed");
+                tracing::info!("Kafka on Aiven is initialized");
                 break;
             }
             Err(e) => {
