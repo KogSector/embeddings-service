@@ -46,6 +46,9 @@ impl EventConsumer {
         if let Ok(ca_location) = std::env::var("KAFKA_SSL_CA_LOCATION") {
             config.set("ssl.ca.location", ca_location);
         }
+        if let Ok(ca_pem) = std::env::var("KAFKA_SSL_CA_PEM") {
+            config.set("ssl.ca.pem", ca_pem.replace("\\n", "\n"));
+        }
 
         let consumer: StreamConsumer = config.create()?;
 
