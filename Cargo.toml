@@ -19,8 +19,7 @@ path = "src/main.rs"
 [dependencies]
 # (Removed confuse-common dependencies)
 
-# Kafka for event streaming (SSL disabled for Windows compatibility)
-rdkafka = { version = "0.36", features = ["cmake-build"] }
+rdkafka = { version = "0.36", features = ["cmake-build", "ssl-vendored"] }
 
 # Async framework
 tokio = { version = "1.0", features = ["full"] }
