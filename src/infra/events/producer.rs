@@ -50,6 +50,11 @@ mod kafka_impl {
 
             let producer: FutureProducer = config.create()?;
 
+            // Verify connection by fetching metadata
+            use rdkafka::producer::Producer;
+            producer.client().fetch_metadata(None, std::time::Duration::from_secs(10))?;
+            tracing::info!("Successfully connected and verified Aiven Kafka at {}", bootstrap_servers);
+
             Ok(Self { producer })
         }
         pub async fn publish<T: Serialize>(&self, topic: &str, event: &T) -> Result<()> {
