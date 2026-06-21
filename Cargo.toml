@@ -2,7 +2,7 @@
 name = "embeddings-service"
 version = "0.1.0"
 edition = "2021"
-description = "Embedding generation service for ConFuse platform — generates vectors via Kafka for unified-processor to store in FalkorDB"
+description = "Embedding generation service for ConFuse platform - generates vectors via Kafka for unified-processor to store in FalkorDB"
 license = "Proprietary"
 authors = ["ConFuse Team"]
 
@@ -19,51 +19,51 @@ path = "src/main.rs"
 [dependencies]
 # (Removed confuse-common dependencies)
 
-rdkafka = { version = "0.36", features = ["cmake-build", "ssl-vendored"] }
+rdkafka = { version = "0.39.0", features = ["cmake-build", "ssl-vendored"] }
 
 # Async framework
-tokio = { version = "1.0", features = ["full"] }
-futures = "0.3"
-futures-util = "0.3"
+tokio = { version = "1.52.3", features = ["full"] }
+futures = "0.3.32"
+futures-util = "0.3.32"
 
 
 
 # Serialization
-serde = { version = "1.0", features = ["derive", "rc"] }
-serde_json = "1.0"
+serde = { version = "1.0.228", features = ["derive", "rc"] }
+serde_json = "1.0.150"
 
 # Configuration
-config = "0.14"
+config = "0.15.24"
 
 # Utilities
-uuid = { version = "1.0", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-anyhow = "1.0"
-thiserror = "1.0"
-async-trait = "0.1"
-dotenvy = "0.15"
+uuid = { version = "1.23.3", features = ["v4", "serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+anyhow = "1.0.102"
+thiserror = "2.0.18"
+async-trait = "0.1.89"
+dotenvy = "0.15.7"
 
 # HTTP client (for Ollama)
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13.4", features = ["json"] }
 
 
 # Concurrency
-dashmap = "5.5"
-parking_lot = "0.12"
-lazy_static = "1.4"
+dashmap = "7.0.0-rc2"
+parking_lot = "0.12.5"
+lazy_static = "1.5.0"
 
 
 # Vector operations
-ndarray = "0.15"
+ndarray = "0.17.2"
 
 # Metrics
-prometheus = "0.13"
+prometheus = "0.14.0"
 [dev-dependencies]
-tokio-test = "0.4"
-tempfile = "3.8"
-proptest = "1.4"
+tokio-test = "0.4.5"
+tempfile = "3.27.0"
+proptest = "1.11.0"
 
 
 [profile.release]
