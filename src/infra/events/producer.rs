@@ -64,8 +64,8 @@ mod kafka_impl {
                 .key("event");
 
             match self.producer.send(record, std::time::Duration::from_secs(0)).await {
-                Ok((partition, offset)) => {
-                    tracing::info!("Event sent to partition {} at offset {}", partition, offset);
+                Ok(delivery) => {
+                    tracing::info!("Event sent successfully");
                     Ok(())
                 }
                 Err((e, _)) => {
