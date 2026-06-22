@@ -56,14 +56,14 @@ GET /api/v1/falkordb/health
 POST /api/v1/generate
 {
   "text": "Sample text for embedding",
-  "model": "all-MiniLM-L6-v2"
+  "model": "mxbai-embed-large"
 }
 
 # Generate batch embeddings
 POST /api/v1/generate/batch
 {
   "texts": ["Text 1", "Text 2", "Text 3"],
-  "model": "all-MiniLM-L6-v2"
+  "model": "mxbai-embed-large"
 }
 
 # Process chunks (HTTP alternative to gRPC)
@@ -80,7 +80,7 @@ POST /api/v1/process/chunks
       }
     }
   ],
-  "model": "all-MiniLM-L6-v2"
+  "model": "mxbai-embed-large"
 }
 ```
 
@@ -433,21 +433,21 @@ GET /api/v1/models
 POST /api/v1/generate
 {
   "text": "Sample text for embedding",
-  "model": "all-MiniLM-L6-v2"
+  "model": "mxbai-embed-large"
 }
 
 # Generate embeddings (batch)
 POST /api/v1/generate/batch
 {
   "texts": ["Text 1", "Text 2", "Text 3"],
-  "model": "all-MiniLM-L6-v2"
+  "model": "mxbai-embed-large"
 }
 
 # Process chunks (HTTP alternative to gRPC)
 POST /api/v1/process/chunks
 {
   "chunks": [...],
-  "model": "all-MiniLM-L6-v2"
+  "model": "mxbai-embed-large"
 }
 ```
 
@@ -482,7 +482,7 @@ FALKORDB_DATABASE=0
 FALKORDB_GRAPH_NAME=confuse_knowledge
 
 # Model Configuration
-DEFAULT_EMBEDDING_MODEL=all-MiniLM-L6-v2
+DEFAULT_EMBEDDING_MODEL=mxbai-embed-large
 EMBEDDING_MODEL_PATH=/models
 EMBEDDING_BATCH_SIZE=32
 
@@ -605,7 +605,7 @@ impl FalcorDBClient {
 ### Supported Models
 
 #### Local Models (Ollama)
-- **all-MiniLM-L6-v2**: Default model, 384 dimensions
+- **mxbai-embed-large**: Default model, 1024 dimensions
 - **all-mpnet-base-v2**: Higher quality, 768 dimensions
 - **e5-large-v2**: Large model, 1024 dimensions
 
@@ -615,7 +615,7 @@ impl FalcorDBClient {
 - **OpenAI text-embedding-3-large**: 3072 dimensions
 
 #### Hugging Face Models
-- **sentence-transformers/all-MiniLM-L6-v2**
+- **sentence-transformers/mxbai-embed-large**
 - **sentence-transformers/all-mpnet-base-v2**
 - Custom sentence-transformer models
 
@@ -623,10 +623,10 @@ impl FalcorDBClient {
 ```json
 {
   "models": {
-    "all-MiniLM-L6-v2": {
+    "mxbai-embed-large": {
       "type": "local",
       "provider": "ollama",
-      "dimensions": 384,
+      "dimensions": 1024,
       "max_tokens": 512,
       "batch_size": 32
     },
