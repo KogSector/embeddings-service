@@ -30,9 +30,9 @@ impl ModelManager {
             return Ok(());
         }
 
-        tracing::info!("Loading Ollama model: {}", model_name);
+        tracing::info!("Loading Gemini model: {}", model_name);
         let model: Arc<dyn EmbeddingModel> = match crate::models::models::ModelType::from_config() {
-            crate::models::models::ModelType::Ollama => Arc::new(crate::models::models::OllamaModel::new(model_name, &self.config)?),
+            crate::models::models::ModelType::Gemini => Arc::new(crate::models::models::GeminiModel::new(model_name, &self.config)?),
         };
 
         models.insert(model_name.to_string(), model);

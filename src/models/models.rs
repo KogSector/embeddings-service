@@ -22,19 +22,19 @@ pub trait EmbeddingModel: Send + Sync {
     }
 }
 
-/// Ollama-based embedding model (local HTTP API)
-pub struct OllamaModel {
+/// Gemini-based embedding model (Google API)
+pub struct GeminiModel {
     name: String,
-    ollama_url: String,
+    api_key: String,
     dimension: usize,
     client: Client,
 }
 
-impl OllamaModel {
+impl GeminiModel {
     pub fn new(model_name: &str, config: &Config) -> Result<Self> {
-        let ollama_url = config.models.ollama_url
-            .clone()
-            .unwrap_or_else(|| "http://localhost:11434".to_string());
+        let api_key = std::env::var("GEMINI_API_KEY")
+            .expect("GEMINI_API_KEY must be set in the environment");
+        
         let dimension = Self::get_model_dimension(model_name);
         let client = Client::builder()
             .timeout(config.models.timeout)
@@ -43,7 +43,7 @@ impl OllamaModel {
 
         Ok(Self {
             name: model_name.to_string(),
-            ollama_url,
+            api_key,
             dimension,
             client,
         })
@@ -51,29 +51,18 @@ impl OllamaModel {
 
     fn get_model_dimension(model_name: &str) -> usize {
         match model_name {
-            "nomic-embed-text" => 768,
-            "mxbai-embed-large" => 1024,
-            "all-minilm" => 384,
-            "snowflake-arctic-embed" => 1024,
+            "embedding-001" => 768,
+            "text-embedding-004" => 768,
             _ => 768,
         }
     }
 
-    /// Returns the maximum character length we allow for the given model.
-    /// Ollama embedding models typically have a 2048-token default context.
-    /// Code tokenizes densely (~2-3 chars/token), so we use conservative limits.
-    fn get_max_input_chars(model_name: &str) -> usize {
-        match model_name {
-            "nomic-embed-text" => 6000,      // 2048 tokens × ~3 chars/token
-            "mxbai-embed-large" => 1500,     // 512 tokens × ~3 chars/token
-            "all-minilm" => 750,             // 256 tokens × ~3 chars/token
-            "snowflake-arctic-embed" => 1500, // 512 tokens × ~3 chars/token
-            _ => 4000,
-        }
+    /// Truncates text conservatively if it's too long
+    fn get_max_input_chars(_model_name: &str) -> usize {
+        10000 // Gemini embedding handles up to 2048 tokens or more (text-embedding-004 handles 2048)
     }
 
     async fn generate_single(&self, text: &str) -> Result<Vec<f32>> {
-        // Truncate text that exceeds the model's context window
         let max_chars = Self::get_max_input_chars(&self.name);
         let input = if text.len() > max_chars {
             tracing::warn!(
@@ -82,7 +71,6 @@ impl OllamaModel {
                 max_chars,
                 self.name
             );
-            // Find a safe char boundary to truncate at
             let mut end = max_chars;
             while !text.is_char_boundary(end) && end > 0 {
                 end -= 1;
@@ -93,52 +81,56 @@ impl OllamaModel {
         };
 
         #[derive(Debug, Serialize)]
-        struct Options {
-            num_ctx: usize,
-        }
-
+        struct GeminiPart { text: String }
+        #[derive(Debug, Serialize)]
+        struct GeminiContent { parts: Vec<GeminiPart> }
         #[derive(Debug, Serialize)]
         struct Request {
             model: String,
-            prompt: String,
-            options: Options,
+            content: GeminiContent,
         }
 
         #[derive(Debug, Deserialize)]
+        struct GeminiEmbedding { values: Vec<f32> }
+        #[derive(Debug, Deserialize)]
         struct Response {
-            embedding: Vec<f32>,
+            embedding: GeminiEmbedding,
         }
 
         let request = Request {
-            model: self.name.clone(),
-            prompt: input.to_string(),
-            options: Options {
-                num_ctx: 8192,
-            },
+            model: format!("models/{}", self.name),
+            content: GeminiContent {
+                parts: vec![GeminiPart { text: input.to_string() }],
+            }
         };
 
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:embedContent?key={}",
+            self.name, self.api_key
+        );
+
         let response = self.client
-            .post(format!("{}/api/embeddings", self.ollama_url))
+            .post(&url)
             .json(&request)
             .send()
             .await
-            .map_err(|e| EmbeddingError::GenerationError(format!("Ollama request failed: {}", e)))?;
+            .map_err(|e| EmbeddingError::GenerationError(format!("Gemini request failed: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(EmbeddingError::GenerationError(format!("Ollama returned {}: {}", status, body)));
+            return Err(EmbeddingError::GenerationError(format!("Gemini returned {}: {}", status, body)));
         }
 
         let result: Response = response.json().await
-            .map_err(|e| EmbeddingError::GenerationError(format!("Failed to parse Ollama response: {}", e)))?;
+            .map_err(|e| EmbeddingError::GenerationError(format!("Failed to parse Gemini response: {}", e)))?;
 
-        Ok(result.embedding)
+        Ok(result.embedding.values)
     }
 }
 
 #[async_trait]
-impl EmbeddingModel for OllamaModel {
+impl EmbeddingModel for GeminiModel {
     fn name(&self) -> &str {
         &self.name
     }
@@ -165,11 +157,11 @@ impl EmbeddingModel for OllamaModel {
 /// Model type enum for configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelType {
-    Ollama,
+    Gemini,
 }
 
 impl ModelType {
     pub fn from_config() -> Self {
-        ModelType::Ollama
+        ModelType::Gemini
     }
 }
