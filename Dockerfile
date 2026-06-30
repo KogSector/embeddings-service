@@ -46,6 +46,10 @@ RUN rm -rf src/*
 # Copy actual source
 COPY src/ ./src/
 
+# Update file modification times to force Cargo to rebuild instead of using the cached dummy build
+RUN touch src/main.rs src/lib.rs 2>/dev/null || true
+RUN find src -type f -exec touch {} +
+
 # Build the application
 RUN cargo build --release
 
