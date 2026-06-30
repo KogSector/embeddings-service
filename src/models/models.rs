@@ -34,9 +34,13 @@ pub struct GeminiModel {
 impl GeminiModel {
     pub fn new(model_name: &str, config: &Config) -> Result<Self> {
         let api_key = std::env::var("GEMINI_API_KEY")
-            .expect("GEMINI_API_KEY must be set in the environment");
+            .unwrap_or_else(|_| "".to_string());
+        if api_key.is_empty() {
+            tracing::warn!("GEMINI_API_KEY is not set. Embedding generation will fail.");
+        }
+        
         let base_url = std::env::var("GEMINI_BASE_URL")
-            .expect("GEMINI_BASE_URL must be set in the environment");
+            .unwrap_or_else(|_| "https://generativelanguage.googleapis.com".to_string());
         
         let dimension = Self::get_model_dimension(model_name);
         let client = Client::builder()

@@ -55,8 +55,26 @@ async fn main() -> anyhow::Result<()> {
     
 
     // Ensure default model is loaded at startup
-    model_manager.ensure_model_loaded(&config.models.default_model)
-        .await?;
+    if let Err(e) = model_manager.ensure_model_loaded(&config.models.default_model).await {
+        tracing::warn!("Failed to load default embedding model at startup: {}", e);
+    }
+
+    // Start a lightweight health check server so Render and Docker healthchecks pass
+    let port = config.server.port;
+    tokio::spawn(async move {
+        let addr = format!("0.0.0.0:{}", port);
+        if let Ok(listener) = tokio::net::TcpListener::bind(&addr).await {
+            tracing::info!("Health check server listening on {}", addr);
+            loop {
+                if let Ok((mut socket, _)) = listener.accept().await {
+                    use tokio::io::AsyncWriteExt;
+                    let _ = socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK").await;
+                }
+            }
+        } else {
+            tracing::error!("Failed to bind health check server to {}", addr);
+        }
+    });
 
     // Initialize Kafka worker
     let kafka_worker = embeddings_service::infra::kafka_worker::KafkaWorker::new(

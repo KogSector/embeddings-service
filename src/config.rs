@@ -37,45 +37,44 @@ impl Config {
     pub fn from_env() -> crate::Result<Self> {
         Ok(Self {
             server: ServerConfig {
-                host: std::env::var("HOST")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: HOST".to_string()))?,
+                host: std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
                 port: std::env::var("PORT")
                     .or_else(|_| std::env::var("EMBEDDINGS_SERVICE_PORT"))
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: PORT or EMBEDDINGS_SERVICE_PORT".to_string()))?
+                    .unwrap_or_else(|_| "3011".to_string())
                     .parse()
                     .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid PORT or EMBEDDINGS_SERVICE_PORT".to_string()))?,
                 workers: std::env::var("WORKERS")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: WORKERS".to_string()))?
+                    .unwrap_or_else(|_| "1".to_string())
                     .parse()
                     .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid WORKERS".to_string()))?,
             },
             models: ModelConfig {
                 default_model: std::env::var("DEFAULT_EMBEDDING_MODEL")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: DEFAULT_EMBEDDING_MODEL".to_string()))?,
+                    .unwrap_or_else(|_| "embedding-001".to_string()),
                 max_batch_size: std::env::var("MAX_BATCH_SIZE")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: MAX_BATCH_SIZE".to_string()))?
+                    .unwrap_or_else(|_| "32".to_string())
                     .parse()
                     .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid MAX_BATCH_SIZE".to_string()))?,
                 timeout: Duration::from_secs(
                     std::env::var("MODEL_TIMEOUT_SECS")
-                        .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: MODEL_TIMEOUT_SECS".to_string()))?
+                        .unwrap_or_else(|_| "30".to_string())
                         .parse()
                         .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid MODEL_TIMEOUT_SECS".to_string()))?
                 ),
             },
             kafka: KafkaConfig {
                 bootstrap_servers: std::env::var("KAFKA_BOOTSTRAP_SERVERS")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: KAFKA_BOOTSTRAP_SERVERS".to_string()))?,
+                    .unwrap_or_else(|_| "".to_string()),
                 group_id: std::env::var("EMBEDDINGS_SERVICE_KAFKA_GROUP_ID")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: EMBEDDINGS_SERVICE_KAFKA_GROUP_ID".to_string()))?,
+                    .unwrap_or_else(|_| "".to_string()),
                 input_topic: std::env::var("KAFKA_INPUT_TOPIC")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: KAFKA_INPUT_TOPIC".to_string()))?,
+                    .unwrap_or_else(|_| "".to_string()),
                 output_topic: std::env::var("KAFKA_OUTPUT_TOPIC")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: KAFKA_OUTPUT_TOPIC".to_string()))?,
+                    .unwrap_or_else(|_| "".to_string()),
                 enabled: std::env::var("KAFKA_ENABLED")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: KAFKA_ENABLED".to_string()))?
+                    .unwrap_or_else(|_| "true".to_string())
                     .parse()
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid KAFKA_ENABLED".to_string()))?,
+                    .unwrap_or(true),
             },
         })
     }
