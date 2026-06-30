@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     pkg-config \
     libssl-dev \
+    libcurl4-openssl-dev \
+    zlib1g-dev \
     build-essential \
     cmake \
     libsasl2-dev \
