@@ -82,19 +82,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=python-builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=python-builder /usr/local/bin /usr/local/bin
 
+# Create non-root user
+WORKDIR /app
+RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser
+
 # Copy Rust binary
-COPY --from=rust-builder /app/target/release/embeddings-service /usr/local/bin/
+COPY --from=rust-builder --chown=appuser:appuser /app/target/release/embeddings-service /usr/local/bin/
 
 # Copy application source for Python modules
-COPY src/ ./src/
+COPY --chown=appuser:appuser src/ ./src/
 
 # Set Python path
 ENV PYTHONPATH=/app/src
 
-# Create non-root user
-WORKDIR /app
-RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser && chown -R appuser:appuser /app
+# Ensure correct permissions
+RUN chown -R appuser:appuser /app
 USER appuser
+
+ENV PORT=3011
 
 # Health check optimized for Cloud Run
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
