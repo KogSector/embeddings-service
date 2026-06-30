@@ -6,10 +6,12 @@
 # ==============================================================================
 
 # Stage 1: Rust builder
-FROM rust:slim-bookworm AS rust-builder
+FROM debian:bookworm-slim AS rust-builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
     pkg-config \
     libssl-dev \
     build-essential \
@@ -17,6 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsasl2-dev \
     librdkafka-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Rust via rustup to guarantee latest stable compiler
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
 
