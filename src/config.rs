@@ -39,10 +39,11 @@ impl Config {
             server: ServerConfig {
                 host: std::env::var("HOST")
                     .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: HOST".to_string()))?,
-                port: std::env::var("EMBEDDINGS_SERVICE_PORT")
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: EMBEDDINGS_SERVICE_PORT".to_string()))?
+                port: std::env::var("PORT")
+                    .or_else(|_| std::env::var("EMBEDDINGS_SERVICE_PORT"))
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: PORT or EMBEDDINGS_SERVICE_PORT".to_string()))?
                     .parse()
-                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid EMBEDDINGS_SERVICE_PORT".to_string()))?,
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid PORT or EMBEDDINGS_SERVICE_PORT".to_string()))?,
                 workers: std::env::var("WORKERS")
                     .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing required env var: WORKERS".to_string()))?
                     .parse()

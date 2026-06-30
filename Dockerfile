@@ -47,7 +47,7 @@ RUN rm -rf src/*
 COPY src/ ./src/
 
 # Build the application
-RUN cargo build --release --features kafka
+RUN cargo build --release
 
 # Stage 2: Final runtime image
 FROM debian:bookworm-slim AS runtime
@@ -67,7 +67,7 @@ WORKDIR /app
 RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser
 
 # Copy Rust binary
-COPY --from=rust-builder --chown=appuser:appuser /app/target/release/embeddings-service /usr/local/bin/
+COPY --from=rust-builder --chown=appuser:appuser /app/target/release/embeddings-service-bin /usr/local/bin/embeddings-service
 
 # Ensure correct permissions
 RUN chown -R appuser:appuser /app
