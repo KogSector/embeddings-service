@@ -25,7 +25,7 @@ cargo run --release
 ```
 
 The service starts at:
-- **HTTP**: `http://localhost:3001`
+- **HTTP**: `https://embeddings-service-xmg6.onrender.com`
 - **gRPC**: `localhost:50054`
 
 ## API Endpoints
