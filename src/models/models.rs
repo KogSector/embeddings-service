@@ -26,6 +26,7 @@ pub trait EmbeddingModel: Send + Sync {
 pub struct GeminiModel {
     name: String,
     api_key: String,
+    base_url: String,
     dimension: usize,
     client: Client,
 }
@@ -34,6 +35,8 @@ impl GeminiModel {
     pub fn new(model_name: &str, config: &Config) -> Result<Self> {
         let api_key = std::env::var("GEMINI_API_KEY")
             .expect("GEMINI_API_KEY must be set in the environment");
+        let base_url = std::env::var("GEMINI_BASE_URL")
+            .expect("GEMINI_BASE_URL must be set in the environment");
         
         let dimension = Self::get_model_dimension(model_name);
         let client = Client::builder()
@@ -44,6 +47,7 @@ impl GeminiModel {
         Ok(Self {
             name: model_name.to_string(),
             api_key,
+            base_url,
             dimension,
             client,
         })
@@ -105,8 +109,8 @@ impl GeminiModel {
         };
 
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:embedContent?key={}",
-            self.name, self.api_key
+            "{}/v1beta/models/{}:embedContent?key={}",
+            self.base_url, self.name, self.api_key
         );
 
         let response = self.client

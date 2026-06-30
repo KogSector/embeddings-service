@@ -31,7 +31,6 @@ pub struct ModelConfig {
     pub default_model: String,
     pub max_batch_size: usize,
     pub timeout: Duration,
-    pub ollama_url: Option<String>,
 }
 
 impl Config {
@@ -62,7 +61,6 @@ impl Config {
                         .parse()
                         .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid MODEL_TIMEOUT_SECS".to_string()))?
                 ),
-                ollama_url: std::env::var("OLLAMA_URL").ok(),
             },
             kafka: KafkaConfig {
                 bootstrap_servers: std::env::var("KAFKA_BOOTSTRAP_SERVERS")
