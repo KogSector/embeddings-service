@@ -16,10 +16,14 @@ async fn main() -> anyhow::Result<()> {
     // Load environment variables from .env
     dotenvy::from_filename_override(".env.map").ok();
     dotenvy::from_filename_override(".env.secret").ok();
-    // Initialize tracing
+    // Initialize tracing with file appender
+    let file_appender = tracing_appender::rolling::daily("logs", "embeddings-service.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
+        .with(tracing_subscriber::fmt::layer().with_writer(non_blocking).json())
         .init();
 
     // Load configuration
@@ -36,7 +40,8 @@ async fn main() -> anyhow::Result<()> {
             loop {
                 if let Ok((mut socket, _)) = listener.accept().await {
                     use tokio::io::AsyncWriteExt;
-                    let _ = socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK").await;
+                    let _ = socket.write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nOK").await;
+                    let _ = socket.shutdown().await;
                 }
             }
         } else {
