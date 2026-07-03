@@ -53,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Checking Kafka connectivity with retry loop...");
     use embeddings_service::infra::events::EventProducer;
     let mut attempts = 0;
-    let max_attempts = 60; // 60 * 5s = 5 minutes timeout
+    let max_attempts = 18; // 18 * 5s = 90 seconds timeout
     
     loop {
         match EventProducer::new(&config.kafka.bootstrap_servers) {
@@ -72,6 +72,24 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
+
+    // Keep-alive self-ping to prevent Render free tier spin-down.
+    // The embeddings-service is a Kafka consumer with no external HTTP traffic,
+    // so without this, Render spins the instance down and it never wakes up.
+    let keep_alive_port = port;
+    tokio::spawn(async move {
+        // Wait for the health server to be ready
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        let client = reqwest::Client::new();
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(600)).await; // every 10 min
+            let url = format!("http://127.0.0.1:{}/health", keep_alive_port);
+            match client.get(&url).send().await {
+                Ok(_) => tracing::debug!("Keep-alive self-ping OK"),
+                Err(e) => tracing::warn!("Keep-alive self-ping failed: {}", e),
+            }
+        }
+    });
 
     // Initialize service components
     let model_manager = Arc::new(ModelManager::new(config.clone()));
