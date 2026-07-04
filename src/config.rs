@@ -50,7 +50,7 @@ impl Config {
             },
             models: ModelConfig {
                 default_model: std::env::var("DEFAULT_EMBEDDING_MODEL")
-                    .unwrap_or_else(|_| "text-embedding-004".to_string()),
+                    .unwrap_or_else(|_| "embedding-003".to_string()),
                 max_batch_size: std::env::var("MAX_BATCH_SIZE")
                     .unwrap_or_else(|_| "32".to_string())
                     .parse()

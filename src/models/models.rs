@@ -58,9 +58,9 @@ impl GeminiModel {
     }
 
     fn get_model_dimension(model_name: &str) -> usize {
-        match model_name {
-            "embedding-001" => 768,
-            "text-embedding-004" => 768,
+        let normalized_name = model_name.trim_start_matches("models/");
+        match normalized_name {
+            "embedding-001" | "text-embedding-004" | "embedding-003" => 768,
             _ => 768,
         }
     }
@@ -105,8 +105,9 @@ impl GeminiModel {
             embedding: GeminiEmbedding,
         }
 
+        let normalized_name = self.name.trim_start_matches("models/");
         let request = Request {
-            model: format!("models/{}", self.name),
+            model: format!("models/{}", normalized_name),
             content: GeminiContent {
                 parts: vec![GeminiPart { text: input.to_string() }],
             }
@@ -114,7 +115,7 @@ impl GeminiModel {
 
         let url = format!(
             "{}/v1beta/models/{}:embedContent?key={}",
-            self.base_url, self.name, self.api_key
+            self.base_url, normalized_name, self.api_key
         );
 
         let response = self.client

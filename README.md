@@ -6,12 +6,12 @@ A high-performance embedding generation and vector search service for the ConFus
 
 ## Features
 
-- **Open Source Models**: SentenceTransformers embedding models
+- **Gemini API Embeddings**: Uses Gemini API models for all embedding generation
 - **Batch Processing**: Efficient batch embedding generation
 - **Vector Search**: Similarity search with pgvector
 - **Caching**: Redis-based caching for performance
 - **REST API**: Clean HTTP API for integration
-- **Hybrid Architecture**: Rust performance with Python ML models
+- **Hybrid Architecture**: Rust service with lightweight Python integration
 
 ## Quick Start
 
@@ -63,7 +63,7 @@ GET /health
 POST /api/v1/generate
 {
   "text": "Your text here",
-  "model": "sentence-transformers/all-MiniLM-L6-v2"
+  "model": "embedding-003"
 }
 ```
 
@@ -72,14 +72,14 @@ POST /api/v1/generate
 POST /api/v1/generate/batch
 {
   "texts": ["Text 1", "Text 2", "Text 3"],
-  "model": "sentence-transformers/all-MiniLM-L6-v2",
+  "model": "embedding-003",
   "batch_size": 32
 }
 ```
 
 ### Vector Search
 ```bash
-GET /api/v1/search?q=query text&model=sentence-transformers/all-MiniLM-L6-v2&limit=10
+GET /api/v1/search?q=query text&model=embedding-003&limit=10
 ```
 
 ### List Models
