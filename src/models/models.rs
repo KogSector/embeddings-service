@@ -114,7 +114,7 @@ impl GeminiModel {
         };
 
         let url = format!(
-            "{}/v1beta/models/{}:embedContent?key={}",
+            "{}/v1/models/{}:embedContent?key={}",
             self.base_url, normalized_name, self.api_key
         );
 
