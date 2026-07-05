@@ -55,12 +55,8 @@ impl GeminiModel {
         })
     }
 
-    fn get_model_dimension(model_name: &str) -> usize {
-        let normalized_name = model_name.trim_start_matches("models/");
-        match normalized_name {
-            "embedding-001" | "text-embedding-004" | "embedding-003" => 768,
-            _ => 768,
-        }
+    fn get_model_dimension(_model_name: &str) -> usize {
+        768
     }
 
     /// Truncates text conservatively if it's too long
