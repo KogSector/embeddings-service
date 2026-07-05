@@ -31,6 +31,8 @@ pub struct ModelConfig {
     pub default_model: String,
     pub max_batch_size: usize,
     pub timeout: Duration,
+    pub gemini_base_url: String,
+    pub gemini_api_key: String,
 }
 
 impl Config {
@@ -50,7 +52,7 @@ impl Config {
             },
             models: ModelConfig {
                 default_model: std::env::var("DEFAULT_EMBEDDING_MODEL")
-                    .unwrap_or_else(|_| "embedding-003".to_string()),
+                    .unwrap_or_else(|_| "text-embedding-004".to_string()),
                 max_batch_size: std::env::var("MAX_BATCH_SIZE")
                     .unwrap_or_else(|_| "32".to_string())
                     .parse()
@@ -61,6 +63,10 @@ impl Config {
                         .parse()
                         .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid MODEL_TIMEOUT_SECS".to_string()))?
                 ),
+                gemini_base_url: std::env::var("GEMINI_BASE_URL")
+                    .unwrap_or_else(|_| "https://generativelanguage.googleapis.com".to_string()),
+                gemini_api_key: std::env::var("GEMINI_API_KEY")
+                    .unwrap_or_else(|_| "".to_string()),
             },
             kafka: KafkaConfig {
                 bootstrap_servers: std::env::var("KAFKA_BOOTSTRAP_SERVERS")
