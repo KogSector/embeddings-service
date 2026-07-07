@@ -39,10 +39,17 @@ impl NvidiaNimModel {
             tracing::warn!("API_KEY is not set. Embedding generation will fail.");
         }
         
-        let base_url = if config.models.gemini_base_url.is_empty() || config.models.gemini_base_url.contains("google") {
-            "https://integrate.api.nvidia.com/v1/embeddings".to_string()
-        } else {
-            config.models.gemini_base_url.clone()
+        let base_url = {
+            let raw = config.models.gemini_base_url.clone();
+            if raw.is_empty() || raw.contains("google") {
+                "https://integrate.api.nvidia.com/v1/embeddings".to_string()
+            } else if raw.ends_with("/v1/embeddings") {
+                raw
+            } else {
+                // Ensure the path suffix is present
+                let trimmed = raw.trim_end_matches('/');
+                format!("{}/v1/embeddings", trimmed)
+            }
         };
         
         let dimension = Self::get_model_dimension(model_name);
