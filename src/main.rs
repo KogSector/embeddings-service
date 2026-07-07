@@ -16,6 +16,7 @@ async fn main() -> anyhow::Result<()> {
     // Load environment variables from .env
     dotenvy::from_filename_override(".env.map").ok();
     dotenvy::from_filename_override(".env.secret").ok();
+    dotenvy::from_filename_override(".env.local").ok();
     // Initialize tracing with file appender
     let file_appender = tracing_appender::rolling::daily("logs", "embeddings-service.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
