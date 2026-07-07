@@ -40,7 +40,9 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("Health check server listening on {}", addr);
             loop {
                 if let Ok((mut socket, _)) = listener.accept().await {
-                    use tokio::io::AsyncWriteExt;
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                    let mut buf = [0; 1024];
+                    let _ = socket.read(&mut buf).await;
                     let _ = socket.write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nOK").await;
                     let _ = socket.shutdown().await;
                 }

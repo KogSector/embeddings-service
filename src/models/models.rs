@@ -72,7 +72,7 @@ impl NvidiaNimModel {
     }
 
     fn get_max_input_chars(_model_name: &str) -> usize {
-        32000 // NV models handle 8k tokens or more
+        10000 // NV models handle 4k tokens, ~10k chars is safe
     }
 }
 
