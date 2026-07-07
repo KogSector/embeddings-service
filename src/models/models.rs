@@ -72,7 +72,7 @@ impl NvidiaNimModel {
     }
 
     fn get_max_input_chars(_model_name: &str) -> usize {
-        10000 // NV models handle 4k tokens, ~10k chars is safe
+        7500 // NV models handle 4k tokens, ~7.5k chars is safely within bounds
     }
 }
 
@@ -96,7 +96,7 @@ impl EmbeddingModel for NvidiaNimModel {
         
         for text in &texts {
             if text.len() > max_chars {
-                tracing::warn!("Truncating input from {} to {} chars", text.len(), max_chars);
+                tracing::debug!("Truncating input from {} to {} chars", text.len(), max_chars);
                 let mut end = max_chars;
                 while !text.is_char_boundary(end) && end > 0 {
                     end -= 1;

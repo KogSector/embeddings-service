@@ -65,7 +65,7 @@ mod kafka_impl {
 
             match self.producer.send(record, std::time::Duration::from_secs(0)).await {
                 Ok(_delivery) => {
-                    tracing::info!("Event sent successfully");
+                    tracing::debug!("Event sent successfully to topic: {}", topic);
                     Ok(())
                 }
                 Err((e, _)) => {
