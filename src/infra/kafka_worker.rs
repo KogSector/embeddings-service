@@ -4,7 +4,7 @@ use crate::infra::events::{
     SimplifiedEmbeddingGeneratedEvent, SimplifiedEmbedding,
 };
 use std::sync::Arc;
-use tracing::{info, error};
+use tracing::{error, info, Instrument};
 use crate::models::ModelManager;
 use crate::Config;
 
@@ -62,7 +62,11 @@ impl KafkaWorker {
             let output_topic = config.kafka.output_topic.clone();
 
             Box::pin(async move {
-                let chunk_count = event.chunks.len();
+                let correlation_id = event.headers.correlation_id.clone().unwrap_or_else(|| event.headers.event_id.clone());
+                let span = tracing::info_span!("process_chunks", correlation_id = %correlation_id);
+                
+                async move {
+                    let chunk_count = event.chunks.len();
                 info!("Processing {} chunks for source: {} (Event: {})", chunk_count, event.source_id, event.headers.event_id);
 
                 // Pre-allocate with known capacity — avoids reallocations.
@@ -110,6 +114,7 @@ impl KafkaWorker {
                 }
 
                 Ok(())
+                }.instrument(span).await
             }) as futures::future::BoxFuture<'static, Result<()>>
         });
 
