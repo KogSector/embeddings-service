@@ -22,8 +22,8 @@ pub trait EmbeddingModel: Send + Sync {
     }
 }
 
-/// Gemini-based embedding model (Google API)
-pub struct GeminiModel {
+/// NVIDIA NIM based embedding model
+pub struct NvidiaNimModel {
     name: String,
     api_key: String,
     base_url: String,
@@ -31,14 +31,19 @@ pub struct GeminiModel {
     client: Client,
 }
 
-impl GeminiModel {
+impl NvidiaNimModel {
     pub fn new(model_name: &str, config: &Config) -> Result<Self> {
+        // We'll map gemini config fields conceptually to NIM or assume env variables
         let api_key = config.models.gemini_api_key.clone();
         if api_key.is_empty() {
-            tracing::warn!("GEMINI_API_KEY is not set. Embedding generation will fail.");
+            tracing::warn!("API_KEY is not set. Embedding generation will fail.");
         }
         
-        let base_url = config.models.gemini_base_url.clone();
+        let base_url = if config.models.gemini_base_url.is_empty() || config.models.gemini_base_url.contains("google") {
+            "https://integrate.api.nvidia.com/v1/embeddings".to_string()
+        } else {
+            config.models.gemini_base_url.clone()
+        };
         
         let dimension = Self::get_model_dimension(model_name);
         let client = Client::builder()
@@ -56,84 +61,16 @@ impl GeminiModel {
     }
 
     fn get_model_dimension(_model_name: &str) -> usize {
-        768
+        1024 // nv-embed-v1 uses 1024 dimensions
     }
 
-    /// Truncates text conservatively if it's too long
     fn get_max_input_chars(_model_name: &str) -> usize {
-        10000 // Gemini embedding handles up to 2048 tokens or more (text-embedding-004 handles 2048)
-    }
-
-    async fn generate_single(&self, text: &str) -> Result<Vec<f32>> {
-        let max_chars = Self::get_max_input_chars(&self.name);
-        let input = if text.len() > max_chars {
-            tracing::warn!(
-                "Truncating input from {} to {} chars for model {}",
-                text.len(),
-                max_chars,
-                self.name
-            );
-            let mut end = max_chars;
-            while !text.is_char_boundary(end) && end > 0 {
-                end -= 1;
-            }
-            &text[..end]
-        } else {
-            text
-        };
-
-        #[derive(Debug, Serialize)]
-        struct GeminiPart { text: String }
-        #[derive(Debug, Serialize)]
-        struct GeminiContent { parts: Vec<GeminiPart> }
-        #[derive(Debug, Serialize)]
-        struct Request {
-            model: String,
-            content: GeminiContent,
-        }
-
-        #[derive(Debug, Deserialize)]
-        struct GeminiEmbedding { values: Vec<f32> }
-        #[derive(Debug, Deserialize)]
-        struct Response {
-            embedding: GeminiEmbedding,
-        }
-
-        let normalized_name = self.name.trim_start_matches("models/");
-        let request = Request {
-            model: format!("models/{}", normalized_name),
-            content: GeminiContent {
-                parts: vec![GeminiPart { text: input.to_string() }],
-            }
-        };
-
-        let url = format!(
-            "{}/v1/models/{}:embedContent?key={}",
-            self.base_url, normalized_name, self.api_key
-        );
-
-        let response = self.client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| EmbeddingError::GenerationError(format!("Gemini request failed: {}", e)))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(EmbeddingError::GenerationError(format!("Gemini returned {}: {}", status, body)));
-        }
-
-        let result: Response = response.json().await
-            .map_err(|e| EmbeddingError::GenerationError(format!("Failed to parse Gemini response: {}", e)))?;
-
-        Ok(result.embedding.values)
+        32000 // NV models handle 8k tokens or more
     }
 }
 
 #[async_trait]
-impl EmbeddingModel for GeminiModel {
+impl EmbeddingModel for NvidiaNimModel {
     fn name(&self) -> &str {
         &self.name
     }
@@ -147,11 +84,66 @@ impl EmbeddingModel for GeminiModel {
             return Ok(vec![]);
         }
 
-        let mut embeddings = Vec::with_capacity(texts.len());
+        let max_chars = Self::get_max_input_chars(&self.name);
+        let mut inputs = Vec::new();
+        
         for text in &texts {
-            let embedding = self.generate_single(text).await?;
-            embeddings.push(embedding);
+            if text.len() > max_chars {
+                tracing::warn!("Truncating input from {} to {} chars", text.len(), max_chars);
+                let mut end = max_chars;
+                while !text.is_char_boundary(end) && end > 0 {
+                    end -= 1;
+                }
+                inputs.push(text[..end].to_string());
+            } else {
+                inputs.push(text.clone());
+            }
         }
+
+        #[derive(Debug, Serialize)]
+        struct NimRequest {
+            model: String,
+            input: Vec<String>,
+            input_type: String,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct NimEmbedding {
+            embedding: Vec<f32>,
+            index: usize,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct NimResponse {
+            data: Vec<NimEmbedding>,
+        }
+
+        let request = NimRequest {
+            model: self.name.clone(),
+            input: inputs,
+            input_type: "query".to_string(),
+        };
+
+        let response = self.client
+            .post(&self.base_url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Accept", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| EmbeddingError::GenerationError(format!("NIM request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(EmbeddingError::GenerationError(format!("NIM returned {}: {}", status, body)));
+        }
+
+        let mut result: NimResponse = response.json().await
+            .map_err(|e| EmbeddingError::GenerationError(format!("Failed to parse NIM response: {}", e)))?;
+
+        result.data.sort_by_key(|e| e.index);
+        let embeddings: Vec<Vec<f32>> = result.data.into_iter().map(|e| e.embedding).collect();
 
         Ok(embeddings)
     }
@@ -160,11 +152,11 @@ impl EmbeddingModel for GeminiModel {
 /// Model type enum for configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelType {
-    Gemini,
+    NvidiaNim,
 }
 
 impl ModelType {
     pub fn from_config() -> Self {
-        ModelType::Gemini
+        ModelType::NvidiaNim
     }
 }

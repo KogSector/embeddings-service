@@ -63,10 +63,12 @@ impl Config {
                         .parse()
                         .map_err(|_| crate::error::EmbeddingError::ConfigError("Invalid MODEL_TIMEOUT_SECS".to_string()))?
                 ),
-                gemini_base_url: std::env::var("GEMINI_BASE_URL")
-                    .unwrap_or_else(|_| "https://generativelanguage.googleapis.com".to_string()),
-                gemini_api_key: std::env::var("GEMINI_API_KEY")
-                    .unwrap_or_else(|_| "".to_string()),
+                gemini_base_url: std::env::var("NVIDIA_NIM_BASE_URL")
+                    .or_else(|_| std::env::var("GEMINI_BASE_URL"))
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing NVIDIA_NIM_BASE_URL".to_string()))?,
+                gemini_api_key: std::env::var("NVIDIA_NIM_API_KEY")
+                    .or_else(|_| std::env::var("GEMINI_API_KEY"))
+                    .map_err(|_| crate::error::EmbeddingError::ConfigError("Missing NVIDIA_NIM_API_KEY".to_string()))?,
             },
             kafka: KafkaConfig {
                 bootstrap_servers: std::env::var("KAFKA_BOOTSTRAP_SERVERS")

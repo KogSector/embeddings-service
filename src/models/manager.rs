@@ -30,9 +30,9 @@ impl ModelManager {
             return Ok(());
         }
 
-        tracing::info!("Loading Gemini model: {}", model_name);
+        tracing::info!("Loading NVIDIA NIM model: {}", model_name);
         let model: Arc<dyn EmbeddingModel> = match crate::models::models::ModelType::from_config() {
-            crate::models::models::ModelType::Gemini => Arc::new(crate::models::models::GeminiModel::new(model_name, &self.config)?),
+            crate::models::models::ModelType::NvidiaNim => Arc::new(crate::models::models::NvidiaNimModel::new(model_name, &self.config)?),
         };
 
         models.insert(model_name.to_string(), model);
