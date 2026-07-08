@@ -131,20 +131,49 @@ impl EmbeddingModel for NvidiaNimModel {
             input_type: "query".to_string(),
         };
 
-        let response = self.client
-            .post(&self.base_url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Accept", "application/json")
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| EmbeddingError::GenerationError(format!("NIM request failed: {}", e)))?;
+        let mut retries = 0;
+        let max_retries = 3;
+        let mut delay = std::time::Duration::from_millis(1500);
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(EmbeddingError::GenerationError(format!("NIM returned {}: {}", status, body)));
-        }
+        let response = loop {
+            match self.client
+                .post(&self.base_url)
+                .header("Authorization", format!("Bearer {}", self.api_key))
+                .header("Accept", "application/json")
+                .json(&request)
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        break resp;
+                    } else if resp.status().is_server_error() || resp.status().as_u16() == 429 {
+                        let status = resp.status();
+                        let body = resp.text().await.unwrap_or_default();
+                        retries += 1;
+                        if retries >= max_retries {
+                            return Err(EmbeddingError::GenerationError(format!("NIM returned {}: {}", status, body)));
+                        }
+                        tracing::warn!("NIM returned {} (attempt {}/{}): {}. Retrying in {:?}...", status, retries, max_retries, body, delay);
+                        tokio::time::sleep(delay).await;
+                        delay *= 2;
+                    } else {
+                        let status = resp.status();
+                        let body = resp.text().await.unwrap_or_default();
+                        return Err(EmbeddingError::GenerationError(format!("NIM returned {}: {}", status, body)));
+                    }
+                },
+                Err(e) => {
+                    retries += 1;
+                    if retries >= max_retries {
+                        return Err(EmbeddingError::GenerationError(format!("NIM request failed after {} retries: {}", max_retries, e)));
+                    }
+                    tracing::warn!("NIM request failed (attempt {}/{}): {}. Retrying in {:?}...", retries, max_retries, e, delay);
+                    tokio::time::sleep(delay).await;
+                    delay *= 2;
+                }
+            }
+        };
 
         let mut result: NimResponse = response.json().await
             .map_err(|e| EmbeddingError::GenerationError(format!("Failed to parse NIM response: {}", e)))?;
