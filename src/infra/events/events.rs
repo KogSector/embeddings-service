@@ -80,6 +80,7 @@ pub struct SimplifiedChunkRawEvent {
     #[serde(default)]
     pub metadata: EventMetadata,
     pub source_id: String,
+    pub repo_name: Option<String>,
     pub chunks: Vec<SimplifiedChunk>,
     pub timestamp: String,
 }
@@ -110,6 +111,7 @@ pub struct SimplifiedEmbeddingGeneratedEvent {
     #[serde(default)]
     pub metadata: EventMetadata,
     pub source_id: String,
+    pub repo_name: Option<String>,
     pub chunks: Vec<SimplifiedEmbedding>,
     pub model: String,
     pub timestamp: String,

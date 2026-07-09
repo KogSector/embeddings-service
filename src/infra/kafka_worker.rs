@@ -100,6 +100,7 @@ impl KafkaWorker {
                         headers: event.headers.clone(),
                         metadata: event.metadata.clone(),
                         source_id: event.source_id.clone(),
+                        repo_name: event.repo_name.clone(),
                         chunks: embeddings,
                         model: model_manager.get_default_model_name().to_string(),
                         timestamp: chrono::Utc::now().to_rfc3339(),
