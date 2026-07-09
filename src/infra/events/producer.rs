@@ -25,8 +25,13 @@ mod kafka_impl {
             let mut config = ClientConfig::new();
             config
                 .set("bootstrap.servers", bootstrap_servers)
-                .set("message.max.bytes", "10485760")
-                .set("delivery.timeout.ms", "60000")
+                .set("message.max.bytes", "10485760") // 10MB
+                .set("delivery.timeout.ms", "300000") // 5 minutes
+                .set("request.timeout.ms", "30000")
+                .set("batch.size", "1048576") // 1MB batches
+                .set("linger.ms", "50") // wait 50ms for more messages to batch
+                .set("queue.buffering.max.messages", "100000")
+                .set("queue.buffering.max.kbytes", "1048576")
                 .set("enable.idempotence", enable_idempotence.to_string());
 
             if let Ok(protocol) = std::env::var("KAFKA_SECURITY_PROTOCOL") {
