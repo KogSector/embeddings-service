@@ -13,7 +13,7 @@ A high-performance embedding generation and vector search service for the ConFus
 - **REST API**: Clean HTTP API for integration
 - **Hybrid Architecture**: Rust service with lightweight Python integration
 
-## Quick Start
+## How to run the microservice
 
 ### Prerequisites
 
@@ -41,7 +41,7 @@ export POSTGRES_URL="postgresql://localhost/embeddings"
 export REDIS_URL="redis://localhost"
 ```
 
-### Running
+### How to run the microservice
 
 ```bash
 # Development
