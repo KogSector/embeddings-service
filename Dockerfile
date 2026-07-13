@@ -32,10 +32,10 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock* ./
 
 # Create dummy src for dependency caching
-RUN mkdir -p src/api src/core src/generators src/models src/infra && \
+RUN mkdir -p src/generators src/models src/infra && \
     echo 'fn main() {}' > src/main.rs && \
-    touch src/lib.rs && \
-    touch src/api/mod.rs src/core/mod.rs src/generators/mod.rs src/models/mod.rs src/infra/mod.rs
+    printf 'pub mod config;\npub mod error;\npub mod generators;\npub mod models;\npub mod infra;\n' > src/lib.rs && \
+    touch src/config.rs src/error.rs src/generators/mod.rs src/models/mod.rs src/infra/mod.rs
 
 # Build dependencies (cached)
 RUN cargo build --release 2>/dev/null || true
@@ -61,6 +61,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     libpq5 \
+    libssl3 \
     dumb-init \
     librdkafka1 \
     libsasl2-2 \
