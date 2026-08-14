@@ -37,7 +37,7 @@ pip install -r requirements.txt
 Set environment variables:
 
 ```bash
-export POSTGRES_URL="postgresql://localhost/embeddings"
+export DATABASE_URL="postgresql://localhost/embeddings"
 export REDIS_URL="redis://localhost"
 ```
 
