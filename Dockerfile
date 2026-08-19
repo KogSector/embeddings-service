@@ -80,7 +80,7 @@ USER appuser
 
 ENV PORT=3011
 
-# Health check
+# Health check optimized for Render
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-3011}/health || exit 1
 
