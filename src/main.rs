@@ -13,10 +13,17 @@ use embeddings_service::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Setup panic handler to catch and log panics
+    std::panic::set_hook(Box::new(|panic_info| {
+        tracing::error!("Panic occurred: {}", panic_info);
+    }));
+
     // Load environment variables from .env
+    tracing::info!("Loading environment variables...");
     dotenvy::from_filename_override(".env.map").ok();
     dotenvy::from_filename_override(".env.secret").ok();
     dotenvy::from_filename_override(".env.local").ok();
+    tracing::info!("Environment variables loaded");
     // Initialize tracing with file appender
     let file_appender = tracing_appender::rolling::daily("logs", "embeddings-service.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);

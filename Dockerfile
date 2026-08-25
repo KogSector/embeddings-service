@@ -74,8 +74,14 @@ RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser
 # Copy Rust binary
 COPY --from=rust-builder --chown=appuser:appuser /app/target/release/embeddings-service-bin /usr/local/bin/embeddings-service
 
-# Ensure correct permissions
-RUN chown -R appuser:appuser /app
+# Verify the binary exists and is executable
+RUN ls -la /usr/local/bin/embeddings-service && \
+    chmod +x /usr/local/bin/embeddings-service
+
+# Ensure correct permissions and create logs directory
+RUN chown -R appuser:appuser /app && \
+    mkdir -p /app/logs && \
+    chown -R appuser:appuser /app/logs
 USER appuser
 
 ENV PORT=3011
