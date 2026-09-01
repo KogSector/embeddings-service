@@ -45,3 +45,5 @@ embeddings/
 .huggingface/
 .cache/
 models/
+
+pytest.*
